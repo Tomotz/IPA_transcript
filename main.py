@@ -1,6 +1,8 @@
 import argparse
 from io import TextIOWrapper
+import html as html_module
 import logging
+import re
 import string
 import subprocess
 from typing import List, Optional
@@ -359,15 +361,64 @@ def print_ipa(out_file: Optional[TextIOWrapper], lines: List[str], fix_line_ends
 
 
 
+SKIP_TAGS = {'script', 'style', 'head', 'noscript'}
+
+def process_html_file(input_path: str, output_path: Optional[str]):
+    with open(input_path, 'r', encoding='utf-8') as f:
+        content = f.read()
+
+    parts = re.split(r'(<[^>]*>)', content)
+
+    skip_depth = 0
+
+    for i, part in enumerate(parts):
+        if part.startswith('<'):
+            tag_match = re.match(r'</?([a-zA-Z][a-zA-Z0-9]*)', part)
+            if tag_match:
+                tag_name = tag_match.group(1).lower()
+                if tag_name in SKIP_TAGS:
+                    if part.startswith('</'):
+                        skip_depth = max(0, skip_depth - 1)
+                    elif not part.endswith('/>'):
+                        skip_depth += 1
+        else:
+            if skip_depth == 0:
+                decoded = html_module.unescape(part)
+                decoded = decoded.replace('\u00a0', ' ')
+                decoded = decoded.replace('\u2013', '-')
+                decoded = decoded.replace('\u2026', '...')
+                stripped = decoded.strip()
+                if stripped and any(c.isalpha() for c in stripped):
+                    cleaned = ' '.join(stripped.split())
+                    normalized = normalize(cleaned)
+                    if normalized.strip():
+                        _, ipa = run_flite(normalized)
+                        leading_ws = decoded[:len(decoded) - len(decoded.lstrip())]
+                        trailing_ws = decoded[len(decoded.rstrip()):]
+                        parts[i] = leading_ws + ipa.strip() + trailing_ws
+
+    result = ''.join(parts)
+
+    if output_path:
+        with open(output_path, 'w', encoding='utf-8') as f:
+            f.write(result)
+    else:
+        print(result)
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("data", type=str, help="Input text or filename")
     parser.add_argument("-f", "--file", action="store_true",
                         help="Indicate that the input is a filename/dirname instead of text. If dir, will translate all the files in that dir. In this case, output must be given, and be a directory")
     parser.add_argument("-o", "--output", type=str, nargs='?', default=None, help="Optional output file/directory. If not given, will print to stdout")
+    parser.add_argument("--html", action="store_true",
+                        help="Process an HTML file, running flite only on text content while preserving HTML tags. Decodes HTML entities before processing.")
 
     # Parse the arguments
     args = parser.parse_args()
+    if args.html:
+        process_html_file(args.data, args.output)
+        return
     out_file = None
     if args.file:
         if os.path.isfile(args.data):
