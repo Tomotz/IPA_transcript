@@ -266,7 +266,7 @@ def run_flite(text: str):
     fixed_text = text
     # fixed_text = " ".join(fix_numbers(fix_nn(text.lower())))
     try:
-        flite_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'flite')
+        flite_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'flite', 'bin', 'flite')
         ipa_text = subprocess.check_output([flite_path, "-t", fixed_text, "-i"]).decode('utf-8')
     except OSError:
         logging.warning('lex_lookup (from flite) is not installed.')
