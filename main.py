@@ -65,9 +65,11 @@ improved_pronounciations = {
     "mɛmɝi":"mɛmɹi",
     "tɹævəlɪŋ":"tɹævlɪŋ",
     "nætʃɝəl":"nætʃɹəl",
-    "æktʃəwəli":"æktʃəli ",
+    "æktʃəwəli":"æktʃəli",
     "ɹɛstɝˈɑnt":"ɹɛstˈɹɑnt",
-    "kwɔɹtɝ":"kɔɹtɝ",
+    "ɛvɝi":"ɛvɹi",
+    "dʒɛnɝəl":"dʒɛnɹəl",
+    "ævɝɪdʒ":"ævɹɪdʒ",
     "pɹɪzənɝ":"pɹɪznɝ",
     # flight mistakes:
     "heɪˈvɛnt":"hævənt",
@@ -137,10 +139,12 @@ def add_double_word_reductions(ipa_text: str, original_text: str):
             first = orig.split(" ")[0]
             if original_word == first:
                 second = orig.split(" ")[1]
-                if len(original_arr) > i and original_arr[i+1] == second:
+                if len(original_arr) > i + 1 and original_arr[i+1] == second:
                     # validate that this is not the last word. last word in sentence don't get reduced
                     next_char = get_next_char(original_arr, i+1, len(second)-1)
                     if next_char != "":
+                        if second in ("will", "have", "has") and i + 2 < len(original_arr) and original_arr[i+2] == "not":
+                            continue
                         if orig in double_word_with_verb:
                             if not is_verb_in_sentence(original_arr[i+2], original_text):
                                 continue
@@ -389,3 +393,4 @@ def main():
 if __name__ == "__main__":
     main()
 
+    
