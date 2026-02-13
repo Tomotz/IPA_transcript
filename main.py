@@ -2,12 +2,12 @@ import argparse
 from io import TextIOWrapper
 import logging
 import string
-import subprocess
 from typing import List, Optional
 import unicodedata
 import os
 import nltk
 from nltk import pos_tag, word_tokenize
+import eng_to_ipa
 
 # Download required NLTK resources if not already available
 nltk.download('averaged_perceptron_tagger', quiet=True)
@@ -265,16 +265,7 @@ def fix_numbers(text_arr: List[str]):
 def run_flite(text: str):
     fixed_text = text
     # fixed_text = " ".join(fix_numbers(fix_nn(text.lower())))
-    print(fixed_text)
-    raise ""
-    try:
-        ipa_text = subprocess.check_output(['flite', "-t", fixed_text, "-i"]).decode('utf-8')
-    except OSError:
-        logging.warning('lex_lookup (from flite) is not installed.')
-        ipa_text = ''
-    except subprocess.CalledProcessError:
-        logging.warning('Non-zero exit status from lex_lookup.')
-        ipa_text = ''
+    ipa_text = eng_to_ipa.convert(fixed_text)
 
     ipa_text = add_reductions_with_stress(ipa_text, fixed_text)
     ipa_text = add_double_word_reductions(ipa_text, fixed_text)
