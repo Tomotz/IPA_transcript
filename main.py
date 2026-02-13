@@ -34,7 +34,7 @@ ipa_letters = ipa_vowels+ipa_consonants
 
 
 normal_reductions = {"for": "fɝ", "your": "jɝ", "you're": "jɝ", "and": "ən", "an": "ən", "that": "ðət",
- "you": "jə", "do": "də", "at": "ət", "from": "fɹəm", "or": "əɹ",
+ "you": "jə", "do": "də", "at": "ət", "from": "fɹəm",
  "there": "ðɝ", "they're": "ðɝ", "when": "wən", "can": "kən", "into": "ɪndə", "some": "səm",
  "than": "ðən", "then": "ðən", "our": "ɝ", "because": "kəz", "us": "əs", "such": "sətʃ", "as": "əz", "i'll": "əl",
  "you'll": "jəl", "he'll": "hɪl", "she'll": "ʃɪl", "it'll": "ɪtəl", "we'll": "wɪl", "they'll": "ðəl"}
@@ -143,7 +143,7 @@ def add_double_word_reductions(ipa_text: str, original_text: str):
                     # validate that this is not the last word. last word in sentence don't get reduced
                     next_char = get_next_char(original_arr, i+1, len(second)-1)
                     if next_char != "":
-                        if second == "will" and i + 2 < len(original_arr) and original_arr[i+2] == "not":
+                        if second in ("will", "have", "has") and i + 2 < len(original_arr) and original_arr[i+2] == "not":
                             continue
                         if orig in double_word_with_verb:
                             if not is_verb_in_sentence(original_arr[i+2], original_text):
