@@ -265,8 +265,6 @@ def fix_numbers(text_arr: List[str]):
 def run_flite(text: str):
     fixed_text = text
     # fixed_text = " ".join(fix_numbers(fix_nn(text.lower())))
-    print(fixed_text)
-    raise ""
     try:
         ipa_text = subprocess.check_output(['flite', "-t", fixed_text, "-i"]).decode('utf-8')
     except OSError:
