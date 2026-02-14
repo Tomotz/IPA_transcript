@@ -12,6 +12,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: true
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -20,6 +22,9 @@ jobs:
 
       - name: Install dependencies
         run: pip install pytest nltk
+
+      - name: Build flite
+        run: cd flite && ./configure && make -j$(nproc)
 
       - name: Run tests
         run: python -m pytest test_main.py -v
