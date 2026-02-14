@@ -1,5 +1,6 @@
 import argparse
 from io import TextIOWrapper
+import json
 import logging
 import string
 import subprocess
@@ -217,13 +218,48 @@ def run_flite(text: str):
     ipa_text = ipa_text.replace("ˈ", "")
     return ipa_text
 
-def print_ipa(out_file: Optional[TextIOWrapper], lines: str):
-    for line in lines:
+CHECKPOINT_INTERVAL = 10
+
+def get_checkpoint_path(output_path):
+    if os.path.isdir(output_path):
+        return os.path.join(output_path, ".ipa_checkpoint")
+    return output_path + ".ipa_checkpoint"
+
+def load_checkpoint(checkpoint_path):
+    if os.path.exists(checkpoint_path):
+        with open(checkpoint_path) as f:
+            return json.load(f)
+    return {}
+
+def save_checkpoint(checkpoint_path, data):
+    with open(checkpoint_path, "w") as f:
+        json.dump(data, f)
+
+def remove_checkpoint(checkpoint_path):
+    if os.path.exists(checkpoint_path):
+        os.remove(checkpoint_path)
+
+def print_ipa(out_file: Optional[TextIOWrapper], lines: str, checkpoint_path: Optional[str] = None, start_line: int = 0):
+    total = len(lines)
+    for i, line in enumerate(lines):
+        if i < start_line:
+            continue
         if out_file:
             out_file.write(run_flite(line))
             out_file.write(line)
+            out_file.flush()
         else:
             print(run_flite(line))
+        if checkpoint_path and (i + 1) % CHECKPOINT_INTERVAL == 0:
+            save_checkpoint(checkpoint_path, {
+                "lines_processed": i + 1,
+                "output_bytes": out_file.tell() if out_file else 0
+            })
+    if checkpoint_path:
+        save_checkpoint(checkpoint_path, {
+            "lines_processed": total,
+            "output_bytes": out_file.tell() if out_file else 0
+        })
 
 def main():
     parser = argparse.ArgumentParser()
@@ -231,30 +267,66 @@ def main():
     parser.add_argument("-f", "--file", action="store_true", 
                         help="Indicate that the input is a filename/dirname instead of text. If dir, will translate all the files in that dir. In this case, output must be given, and be a directory")
     parser.add_argument("-o", "--output", type=str, nargs='?', default=None, help="Optional output file/directory. If not given, will print to stdout")
+    parser.add_argument("-r", "--resume", action="store_true",
+                        help="Resume from the last checkpoint. Requires --output to be set")
     
     # Parse the arguments
     args = parser.parse_args()
     out_file = None
+
+    if args.resume and not args.output:
+        parser.error("--resume requires --output to be set")
+
     if args.file:
         if os.path.isfile(args.data):
             lines = open(args.data).readlines()
         else:
             assert args.output, "When directory is given, output must also be a directory"
+            checkpoint_path = get_checkpoint_path(args.output)
+            completed_files = set()
+            if args.resume:
+                checkpoint = load_checkpoint(checkpoint_path)
+                completed_files = set(checkpoint.get("completed_files", []))
+                if completed_files:
+                    print(f"Resuming: skipping {len(completed_files)} already completed files")
+
             for root, folders, files in os.walk(args.data):
                 for file_name in files:
-                    with open(os.path.join(root, file_name)) as f:
+                    input_path = os.path.join(root, file_name)
+                    if input_path in completed_files:
+                        continue
+                    with open(input_path) as f:
                         lines = f.readlines()
                     out_file_name = "ipa_" + file_name
                     with open(os.path.join(args.output, out_file_name), "w") as o:
                         print_ipa(o, lines)
+                    completed_files.add(input_path)
+                    save_checkpoint(checkpoint_path, {"completed_files": list(completed_files)})
+
+            remove_checkpoint(checkpoint_path)
             return
     else:
         lines = args.data.split("\n")
+
     if args.output is not None:
-        out_file = open(args.output, "w")
-    print_ipa(out_file, lines)
-    if args.output is not None:
+        checkpoint_path = get_checkpoint_path(args.output)
+        start_line = 0
+        if args.resume:
+            checkpoint = load_checkpoint(checkpoint_path)
+            start_line = checkpoint.get("lines_processed", 0)
+            output_bytes = checkpoint.get("output_bytes", 0)
+            if start_line > 0:
+                print(f"Resuming from line {start_line}")
+                if output_bytes > 0 and os.path.exists(args.output):
+                    with open(args.output, "r+b") as f:
+                        f.truncate(output_bytes)
+        mode = "a" if start_line > 0 else "w"
+        out_file = open(args.output, mode)
+        print_ipa(out_file, lines, checkpoint_path, start_line)
         out_file.close()
+        remove_checkpoint(checkpoint_path)
+    else:
+        print_ipa(None, lines)
 
 if __name__ == "__main__":
     main()
