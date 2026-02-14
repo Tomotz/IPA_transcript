@@ -409,7 +409,9 @@ def process_html_file(input_path: str, output_path: Optional[str]):
                     if decoded_part.strip() and any(c.isalpha() for c in decoded_part):
                         normalized = normalize(decoded_part)
                         _, ipa = run_flite(normalized)
-                        ipa_parts.append(ipa.strip())
+                        leading = decoded_part[:len(decoded_part) - len(decoded_part.lstrip())]
+                        trailing = decoded_part[len(decoded_part.rstrip()):]
+                        ipa_parts.append(leading + ipa.strip() + trailing)
                     else:
                         ipa_parts.append(decoded_part)
             ipa_inner = ''.join(ipa_parts)
