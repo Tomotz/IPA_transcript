@@ -1,6 +1,7 @@
 import argparse
 from io import TextIOWrapper
 import html as html_module
+import json
 import logging
 import re
 import string
@@ -335,9 +336,33 @@ def fix_line_ending(line: str) -> Optional[str]:
     is_chapter = False
     return line
 
-def print_ipa(out_file: Optional[TextIOWrapper], lines: List[str], fix_line_ends: bool = True):
+CHECKPOINT_INTERVAL = 10
+
+def get_checkpoint_path(output_path):
+    if os.path.isdir(output_path):
+        return os.path.join(output_path, ".ipa_checkpoint")
+    return output_path + ".ipa_checkpoint"
+
+def load_checkpoint(checkpoint_path):
+    if os.path.exists(checkpoint_path):
+        with open(checkpoint_path) as f:
+            return json.load(f)
+    return {}
+
+def save_checkpoint(checkpoint_path, data):
+    with open(checkpoint_path, "w") as f:
+        json.dump(data, f)
+
+def remove_checkpoint(checkpoint_path):
+    if os.path.exists(checkpoint_path):
+        os.remove(checkpoint_path)
+
+def print_ipa(out_file: Optional[TextIOWrapper], lines: List[str], fix_line_ends: bool = True, checkpoint_path: Optional[str] = None, start_line: int = 0):
     global cached_text
-    for line in lines:
+    total = len(lines)
+    for i, line in enumerate(lines):
+        if i < start_line:
+            continue
         normalized_line = normalize(line)
         if fix_line_ends:
             normalized_line = fix_line_ending(normalized_line)
@@ -346,19 +371,38 @@ def print_ipa(out_file: Optional[TextIOWrapper], lines: List[str], fix_line_ends
         if out_file:
             if normalized_line == "\n":
                 out_file.write(normalized_line)
+                out_file.flush()
                 continue
             orig, ipa = run_flite(normalized_line)
             out_file.write(ipa)
             out_file.write(orig)
+            out_file.flush()
         else:
             print(run_flite(normalized_line))
+        if checkpoint_path and (i + 1) % CHECKPOINT_INTERVAL == 0:
+            save_checkpoint(checkpoint_path, {
+                "lines_processed": i + 1,
+                "output_bytes": out_file.tell() if out_file else 0,
+                "cached_text": cached_text,
+                "line_end_count": line_end_count,
+                "is_chapter": is_chapter
+            })
     if cached_text != "":
         if out_file:
             orig, ipa = run_flite(cached_text)
             out_file.write(ipa)
             out_file.write(orig)
+            out_file.flush()
         else:
             print(run_flite(cached_text))
+    if checkpoint_path:
+        save_checkpoint(checkpoint_path, {
+            "lines_processed": total,
+            "output_bytes": out_file.tell() if out_file else 0,
+            "cached_text": "",
+            "line_end_count": 0,
+            "is_chapter": False
+        })
 
 
 
@@ -380,54 +424,91 @@ def _decode_text_nodes(html_str: str) -> str:
             parts[i] = _decode_html_text(part)
     return ''.join(parts)
 
-def process_html_file(input_path: str, output_path: Optional[str]):
+def _process_single_paragraph(match: re.Match, paragraph_count: int, counter: int) -> str:
+    open_tag = match.group(1)
+    inner = match.group(2)
+    close_tag = match.group(3)
+
+    plain_text = TAG_PATTERN.sub('', inner)
+    decoded_text = _decode_html_text(plain_text)
+    stripped = decoded_text.strip()
+
+    decoded_inner = _decode_text_nodes(inner)
+
+    if stripped and any(c.isalpha() for c in stripped):
+        parts = re.split(r'(<[^>]*>)', inner)
+        ipa_parts = []
+        for part in parts:
+            if part.startswith('<'):
+                ipa_parts.append(part)
+            else:
+                decoded_part = _decode_html_text(part)
+                if decoded_part.strip() and any(c.isalpha() for c in decoded_part):
+                    normalized = normalize(decoded_part)
+                    _, ipa = run_flite(normalized)
+                    ipa_parts.append(ipa.strip())
+                else:
+                    ipa_parts.append(decoded_part)
+        ipa_inner = ''.join(ipa_parts)
+        print(f"paragraph {counter} / {paragraph_count}")
+        return open_tag + ipa_inner + close_tag + '\n' + open_tag + decoded_inner + close_tag
+
+    return open_tag + decoded_inner + close_tag
+
+def process_html_file(input_path: str, output_path: Optional[str], resume: bool = False):
     with open(input_path, 'r', encoding='utf-8') as f:
         content = f.read()
 
-    paragraph_count = len(PARAGRAPH_PATTERN.findall(content))
+    matches = list(PARAGRAPH_PATTERN.finditer(content))
+    paragraph_count = len(matches)
 
-    def replace_paragraph(match: re.Match) -> str:
-        replace_paragraph.counter += 1
-        open_tag = match.group(1)
-        inner = match.group(2)
-        close_tag = match.group(3)
+    checkpoint_path = get_checkpoint_path(output_path) if output_path else None
+    start_paragraph = 0
 
-        plain_text = TAG_PATTERN.sub('', inner)
-        decoded_text = _decode_html_text(plain_text)
-        stripped = decoded_text.strip()
+    if resume and checkpoint_path:
+        checkpoint = load_checkpoint(checkpoint_path)
+        start_paragraph = checkpoint.get("paragraphs_processed", 0)
+        output_bytes = checkpoint.get("output_bytes", 0)
+        if start_paragraph > 0:
+            print(f"Resuming HTML from paragraph {start_paragraph} / {paragraph_count}")
+            if output_bytes > 0 and os.path.exists(output_path):
+                with open(output_path, "r+b") as f:
+                    f.truncate(output_bytes)
 
-        decoded_inner = _decode_text_nodes(inner)
+    if not output_path:
+        counter = [0]
+        def replace_paragraph(match):
+            counter[0] += 1
+            return _process_single_paragraph(match, paragraph_count, counter[0])
+        print(PARAGRAPH_PATTERN.sub(replace_paragraph, content))
+        return
 
-        if stripped and any(c.isalpha() for c in stripped):
-            parts = re.split(r'(<[^>]*>)', inner)
-            ipa_parts = []
-            for part in parts:
-                if part.startswith('<'):
-                    ipa_parts.append(part)
-                else:
-                    decoded_part = _decode_html_text(part)
-                    if decoded_part.strip() and any(c.isalpha() for c in decoded_part):
-                        normalized = normalize(decoded_part)
-                        _, ipa = run_flite(normalized)
-                        ipa_parts.append(ipa.strip())
-                    else:
-                        ipa_parts.append(decoded_part)
-            ipa_inner = ''.join(ipa_parts)
-            print(f"paragraph {replace_paragraph.counter} / {paragraph_count}")
-            return open_tag + ipa_inner + close_tag + '\n' + open_tag + decoded_inner + close_tag
+    mode = "a" if start_paragraph > 0 else "w"
+    out_file = open(output_path, mode, encoding='utf-8')
+    prev_end = 0
 
-        return open_tag + decoded_inner + close_tag
+    for idx, match in enumerate(matches):
+        if idx < start_paragraph:
+            prev_end = match.end()
+            continue
+        out_file.write(content[prev_end:match.start()])
+        out_file.write(_process_single_paragraph(match, paragraph_count, idx + 1))
+        out_file.flush()
+        prev_end = match.end()
+        if checkpoint_path:
+            save_checkpoint(checkpoint_path, {
+                "paragraphs_processed": idx + 1,
+                "output_bytes": out_file.tell()
+            })
 
-    replace_paragraph.counter = 0
-    result = PARAGRAPH_PATTERN.sub(replace_paragraph, content)
-
-    if output_path:
-        with open(output_path, 'w', encoding='utf-8') as f:
-            f.write(result)
-    else:
-        print(result)
+    out_file.write(content[prev_end:])
+    out_file.flush()
+    out_file.close()
+    if checkpoint_path:
+        remove_checkpoint(checkpoint_path)
 
 def main():
+    global cached_text, line_end_count, is_chapter
     parser = argparse.ArgumentParser()
     parser.add_argument("data", type=str, help="Input text or filename")
     parser.add_argument("-f", "--file", action="store_true",
@@ -435,11 +516,17 @@ def main():
     parser.add_argument("-o", "--output", type=str, nargs='?', default=None, help="Optional output file/directory. If not given, will print to stdout")
     parser.add_argument("--html", action="store_true",
                         help="Process an HTML file, running flite only on text content while preserving HTML tags. Decodes HTML entities before processing.")
+    parser.add_argument("-r", "--resume", action="store_true",
+                        help="Resume from the last checkpoint. Requires --output to be set")
 
     # Parse the arguments
     args = parser.parse_args()
+
+    if args.resume and not args.output:
+        parser.error("--resume requires --output to be set")
+
     if args.html:
-        process_html_file(args.data, args.output)
+        process_html_file(args.data, args.output, args.resume)
         return
     out_file = None
     if args.file:
@@ -447,21 +534,54 @@ def main():
             lines = open(args.data).readlines()
         else:
             assert args.output, "When directory is given, output must also be a directory"
+            checkpoint_path = get_checkpoint_path(args.output)
+            completed_files = set()
+            if args.resume:
+                checkpoint = load_checkpoint(checkpoint_path)
+                completed_files = set(checkpoint.get("completed_files", []))
+                if completed_files:
+                    print(f"Resuming: skipping {len(completed_files)} already completed files")
+
             for root, folders, files in os.walk(args.data):
                 for file_name in files:
-                    with open(os.path.join(root, file_name)) as f:
+                    input_path = os.path.join(root, file_name)
+                    if input_path in completed_files:
+                        continue
+                    with open(input_path) as f:
                         lines = f.readlines()
                     out_file_name = "ipa_" + file_name
                     with open(os.path.join(args.output, out_file_name), "w") as o:
                         print_ipa(o, lines)
+                    completed_files.add(input_path)
+                    save_checkpoint(checkpoint_path, {"completed_files": list(completed_files)})
+
+            remove_checkpoint(checkpoint_path)
             return
     else:
         lines = args.data.split("\n")
+
     if args.output is not None:
-        out_file = open(args.output, "w")
-    print_ipa(out_file, lines)
-    if args.output is not None:
+        checkpoint_path = get_checkpoint_path(args.output)
+        start_line = 0
+        if args.resume:
+            checkpoint = load_checkpoint(checkpoint_path)
+            start_line = checkpoint.get("lines_processed", 0)
+            output_bytes = checkpoint.get("output_bytes", 0)
+            if start_line > 0:
+                print(f"Resuming from line {start_line}")
+                cached_text = checkpoint.get("cached_text", "")
+                line_end_count = checkpoint.get("line_end_count", 0)
+                is_chapter = checkpoint.get("is_chapter", False)
+                if output_bytes > 0 and os.path.exists(args.output):
+                    with open(args.output, "r+b") as f:
+                        f.truncate(output_bytes)
+        mode = "a" if start_line > 0 else "w"
+        out_file = open(args.output, mode)
+        print_ipa(out_file, lines, checkpoint_path=checkpoint_path, start_line=start_line)
         out_file.close()
+        remove_checkpoint(checkpoint_path)
+    else:
+        print_ipa(None, lines)
 
 if __name__ == "__main__":
     main()
