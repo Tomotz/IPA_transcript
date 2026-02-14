@@ -361,43 +361,48 @@ def print_ipa(out_file: Optional[TextIOWrapper], lines: List[str], fix_line_ends
 
 
 
-SKIP_TAGS = {'script', 'style', 'head', 'noscript'}
+PARAGRAPH_PATTERN = re.compile(r'(<p\b[^>]*>)(.*?)(</p>)', re.DOTALL | re.IGNORECASE)
+TAG_PATTERN = re.compile(r'<[^>]*>')
+
+def _decode_html_text(text: str) -> str:
+    decoded = html_module.unescape(text)
+    decoded = decoded.replace('\u00a0', ' ')
+    decoded = decoded.replace('\u2013', '-')
+    decoded = decoded.replace('\u2026', '...')
+    return decoded
+
+def _decode_text_nodes(html_str: str) -> str:
+    parts = re.split(r'(<[^>]*>)', html_str)
+    for i, part in enumerate(parts):
+        if not part.startswith('<'):
+            parts[i] = _decode_html_text(part)
+    return ''.join(parts)
 
 def process_html_file(input_path: str, output_path: Optional[str]):
     with open(input_path, 'r', encoding='utf-8') as f:
         content = f.read()
 
-    parts = re.split(r'(<[^>]*>)', content)
+    def replace_paragraph(match: re.Match) -> str:
+        open_tag = match.group(1)
+        inner = match.group(2)
+        close_tag = match.group(3)
 
-    skip_depth = 0
+        plain_text = TAG_PATTERN.sub('', inner)
+        decoded_text = _decode_html_text(plain_text)
+        stripped = decoded_text.strip()
 
-    for i, part in enumerate(parts):
-        if part.startswith('<'):
-            tag_match = re.match(r'</?([a-zA-Z][a-zA-Z0-9]*)', part)
-            if tag_match:
-                tag_name = tag_match.group(1).lower()
-                if tag_name in SKIP_TAGS:
-                    if part.startswith('</'):
-                        skip_depth = max(0, skip_depth - 1)
-                    elif not part.endswith('/>'):
-                        skip_depth += 1
-        else:
-            if skip_depth == 0:
-                decoded = html_module.unescape(part)
-                decoded = decoded.replace('\u00a0', ' ')
-                decoded = decoded.replace('\u2013', '-')
-                decoded = decoded.replace('\u2026', '...')
-                stripped = decoded.strip()
-                if stripped and any(c.isalpha() for c in stripped):
-                    cleaned = ' '.join(stripped.split())
-                    normalized = normalize(cleaned)
-                    if normalized.strip():
-                        _, ipa = run_flite(normalized)
-                        leading_ws = decoded[:len(decoded) - len(decoded.lstrip())]
-                        trailing_ws = decoded[len(decoded.rstrip()):]
-                        parts[i] = leading_ws + ipa.strip() + trailing_ws
+        decoded_inner = _decode_text_nodes(inner)
 
-    result = ''.join(parts)
+        if stripped and any(c.isalpha() for c in stripped):
+            cleaned = ' '.join(stripped.split())
+            normalized = normalize(cleaned)
+            if normalized.strip():
+                _, ipa = run_flite(normalized)
+                return open_tag + ipa.strip() + close_tag + '\n' + open_tag + decoded_inner + close_tag
+
+        return open_tag + decoded_inner + close_tag
+
+    result = PARAGRAPH_PATTERN.sub(replace_paragraph, content)
 
     if output_path:
         with open(output_path, 'w', encoding='utf-8') as f:
