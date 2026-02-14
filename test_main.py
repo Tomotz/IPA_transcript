@@ -1,5 +1,7 @@
 import json
 import os
+import re
+import subprocess
 import tempfile
 
 import pytest
@@ -20,6 +22,7 @@ from main import (
     remove_checkpoint,
     _decode_html_text,
     _decode_text_nodes,
+    process_html_file,
     is_verb_in_sentence,
     ipa_vowels,
     ipa_consonants,
@@ -322,3 +325,129 @@ class TestConstants:
 
     def test_double_word_reductions_non_empty(self):
         assert len(double_word_reductions) > 0
+
+
+def _flite_available():
+    flite_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'flite', 'bin', 'flite')
+    if not os.path.isfile(flite_path):
+        return False
+    try:
+        subprocess.check_output([flite_path, "-t", "test", "-i"])
+        return True
+    except (OSError, subprocess.CalledProcessError):
+        return False
+
+requires_flite = pytest.mark.skipif(not _flite_available(), reason="flite binary not available")
+
+IPA_CHARS = set(ipa_vowels + ipa_consonants + "ɾˈˌ")
+
+
+def _extract_text_from_html(html_content):
+    return re.sub(r'<[^>]*>', '', html_content)
+
+
+def _word_overlap_ratio(text_a, text_b):
+    words_a = set(re.findall(r'[a-zA-Z]+', text_a.lower()))
+    words_b = set(re.findall(r'[a-zA-Z]+', text_b.lower()))
+    if not words_a:
+        return 0.0
+    return len(words_a & words_b) / len(words_a)
+
+
+@requires_flite
+class TestProcessHtmlFileIntegration:
+
+    def test_simple_html_no_exception(self, tmp_path):
+        html = "<html><body><p>The cat sat on the mat.</p></body></html>"
+        input_file = tmp_path / "input.html"
+        output_file = tmp_path / "output.html"
+        input_file.write_text(html, encoding="utf-8")
+        process_html_file(str(input_file), str(output_file))
+        assert output_file.exists()
+        result = output_file.read_text(encoding="utf-8")
+        assert len(result) > 0
+
+    def test_output_contains_ipa(self, tmp_path):
+        html = "<html><body><p>The quick brown fox jumps over the lazy dog.</p></body></html>"
+        input_file = tmp_path / "input.html"
+        output_file = tmp_path / "output.html"
+        input_file.write_text(html, encoding="utf-8")
+        process_html_file(str(input_file), str(output_file))
+        result = output_file.read_text(encoding="utf-8")
+        found_ipa = any(ch in IPA_CHARS for ch in result)
+        assert found_ipa, "Output should contain IPA characters"
+
+    def test_output_preserves_original_text(self, tmp_path):
+        html = "<html><body><p>Hello world, this is a simple test.</p></body></html>"
+        input_file = tmp_path / "input.html"
+        output_file = tmp_path / "output.html"
+        input_file.write_text(html, encoding="utf-8")
+        process_html_file(str(input_file), str(output_file))
+        result = output_file.read_text(encoding="utf-8")
+        plain_output = _extract_text_from_html(result)
+        assert _word_overlap_ratio("Hello world this is a simple test", plain_output) > 0.5
+
+    def test_html_tags_preserved(self, tmp_path):
+        html = "<html><body><p>Some <b>bold</b> text here.</p></body></html>"
+        input_file = tmp_path / "input.html"
+        output_file = tmp_path / "output.html"
+        input_file.write_text(html, encoding="utf-8")
+        process_html_file(str(input_file), str(output_file))
+        result = output_file.read_text(encoding="utf-8")
+        assert "<b>" in result
+        assert "</b>" in result
+
+    def test_multiple_paragraphs(self, tmp_path):
+        html = (
+            "<html><body>"
+            "<p>First paragraph with some words.</p>"
+            "<p>Second paragraph has different words.</p>"
+            "<p>Third paragraph is also here.</p>"
+            "</body></html>"
+        )
+        input_file = tmp_path / "input.html"
+        output_file = tmp_path / "output.html"
+        input_file.write_text(html, encoding="utf-8")
+        process_html_file(str(input_file), str(output_file))
+        result = output_file.read_text(encoding="utf-8")
+        p_tags = re.findall(r'<p\b[^>]*>', result)
+        assert len(p_tags) >= 6, "Each input paragraph should produce an IPA paragraph and an original paragraph"
+
+    def test_non_paragraph_content_preserved(self, tmp_path):
+        html = "<html><head><title>Test</title></head><body><h1>Title</h1><p>Paragraph text.</p></body></html>"
+        input_file = tmp_path / "input.html"
+        output_file = tmp_path / "output.html"
+        input_file.write_text(html, encoding="utf-8")
+        process_html_file(str(input_file), str(output_file))
+        result = output_file.read_text(encoding="utf-8")
+        assert "<h1>Title</h1>" in result
+        assert "<title>Test</title>" in result
+
+    def test_empty_paragraph_no_crash(self, tmp_path):
+        html = "<html><body><p></p><p>Real content here.</p></body></html>"
+        input_file = tmp_path / "input.html"
+        output_file = tmp_path / "output.html"
+        input_file.write_text(html, encoding="utf-8")
+        process_html_file(str(input_file), str(output_file))
+        result = output_file.read_text(encoding="utf-8")
+        assert len(result) > 0
+
+    def test_html_entities_handled(self, tmp_path):
+        html = "<html><body><p>Tom &amp; Jerry went to the park.</p></body></html>"
+        input_file = tmp_path / "input.html"
+        output_file = tmp_path / "output.html"
+        input_file.write_text(html, encoding="utf-8")
+        process_html_file(str(input_file), str(output_file))
+        result = output_file.read_text(encoding="utf-8")
+        found_ipa = any(ch in IPA_CHARS for ch in result)
+        assert found_ipa
+
+    def test_stdout_mode_no_exception(self, tmp_path, capsys):
+        html = "<html><body><p>Testing stdout output mode.</p></body></html>"
+        input_file = tmp_path / "input.html"
+        input_file.write_text(html, encoding="utf-8")
+        process_html_file(str(input_file), None)
+        captured = capsys.readouterr()
+        assert len(captured.out) > 0
+        found_ipa = any(ch in IPA_CHARS for ch in captured.out)
+        assert found_ipa
