@@ -14,6 +14,8 @@ from nltk import pos_tag, word_tokenize
 # Download required NLTK resources if not already available
 nltk.download('averaged_perceptron_tagger', quiet=True)
 nltk.download('punkt', quiet=True)
+nltk.download('punkt_tab', quiet=True)
+nltk.download('averaged_perceptron_tagger_eng', quiet=True)
 
 def is_verb_in_sentence(word, sentence):
     # Tokenize the sentence into words
@@ -392,7 +394,10 @@ def process_html_file(input_path: str, output_path: Optional[str]):
                     cleaned = ' '.join(stripped.split())
                     normalized = normalize(cleaned)
                     if normalized.strip():
-                        _, ipa = run_flite(normalized)
+                        orig, ipa = run_flite(normalized)
+                        print(f"original text: {orig}, ipa_text: {ipa}")
+                        print(f"part {i} / {len(parts)}")
+
                         leading_ws = decoded[:len(decoded) - len(decoded.lstrip())]
                         trailing_ws = decoded[len(decoded.rstrip()):]
                         parts[i] = leading_ws + ipa.strip() + trailing_ws
@@ -444,4 +449,3 @@ def main():
 if __name__ == "__main__":
     main()
 
-    
