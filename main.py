@@ -399,12 +399,22 @@ def process_html_file(input_path: str, output_path: Optional[str]):
         decoded_inner = _decode_text_nodes(inner)
 
         if stripped and any(c.isalpha() for c in stripped):
-            cleaned = ' '.join(stripped.split())
-            normalized = normalize(cleaned)
-            if normalized.strip():
-                _, ipa = run_flite(normalized)
-                print(f"paragraph {replace_paragraph.counter} / {paragraph_count}")
-                return open_tag + ipa.strip() + close_tag + '\n' + open_tag + decoded_inner + close_tag
+            parts = re.split(r'(<[^>]*>)', inner)
+            ipa_parts = []
+            for part in parts:
+                if part.startswith('<'):
+                    ipa_parts.append(part)
+                else:
+                    decoded_part = _decode_html_text(part)
+                    if decoded_part.strip() and any(c.isalpha() for c in decoded_part):
+                        normalized = normalize(decoded_part)
+                        _, ipa = run_flite(normalized)
+                        ipa_parts.append(ipa.strip())
+                    else:
+                        ipa_parts.append(decoded_part)
+            ipa_inner = ''.join(ipa_parts)
+            print(f"paragraph {replace_paragraph.counter} / {paragraph_count}")
+            return open_tag + ipa_inner + close_tag + '\n' + open_tag + decoded_inner + close_tag
 
         return open_tag + decoded_inner + close_tag
 
