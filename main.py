@@ -1,3 +1,5 @@
+# Rebuild flite: cd flite; make clean && make -j$(nproc)
+
 import argparse
 from concurrent.futures import ThreadPoolExecutor
 from io import TextIOWrapper
@@ -45,9 +47,9 @@ h_reduction = {"him": "ɪm", "his": "ɪz", "her": "ɝ", "he":"i", "who": "u", "h
 # I think these next reduction are often not reduced, so not adding those:
 # "but": "bət", "one": "ən", "so": "sə",
 
-double_word_reductions = { "do you": "dju", "what did": "wʌd", "he has": "hiz", "she has": "ʃiz", "it has": "ɪts",
+double_word_reductions = { "do you": "dju", "what did": "wʌd", # These are ofter wrong: "he has": "hiz", "she has": "ʃiz", "it has": "ɪts",
  "i will": "əl", "you will": "jəl", "he will": "hɪl", "she will": "ʃɪl", "it will": "ɪtəl",
- "we will": "wɪl", "they will": "ðəl", "you have": "juv", "we have": "wɪv", "they have": "ðeɪv",
+ "we will": "wɪl", "they will": "ðəl", # These are ofter wrong: "you have": "juv", "we have": "wɪv", "they have": "ðeɪv",
  "i am": "aɪm", "he is": "hiz", "she is": "ʃiz", "it is": "ɪts", "we are": "wɝ", "want to": "wɑnə",
  "kind of": "kaɪndə", "give me": "ɡɪmi", "let me": "lemi" }
 # These next few are not reduced often (For example - I should have it). I'll only reduce those before a verb, though I'm not sure it's the right call
@@ -513,7 +515,8 @@ def _assemble_paragraph(prep_data, flite_results, paragraph_count, counter):
         else:
             ipa_parts.append(_decode_html_text(part))
     ipa_inner = ''.join(ipa_parts)
-    print(f"paragraph {counter} / {paragraph_count}")
+    if counter % max(1, (paragraph_count // 100)) == 0:
+        print(f"paragraph {counter} / {paragraph_count}")
     return open_tag + ipa_inner + close_tag + '\n' + open_tag + decoded_inner + close_tag
 
 def _process_single_paragraph(match: re.Match, paragraph_count: int, counter: int) -> str:
@@ -675,4 +678,3 @@ def main():
 if __name__ == "__main__":
     main()
 
-    
