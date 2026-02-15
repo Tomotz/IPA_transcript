@@ -397,7 +397,6 @@ def print_ipa(out_file: Optional[TextIOWrapper], lines: List[str], fix_line_ends
         if not pending_texts:
             return
         batch_results = _run_flite_batch(pending_texts)
-        result_idx = 0
         all_outputs = []
         for pos_idx, marker in newline_positions:
             all_outputs.append((pos_idx, marker, None))
