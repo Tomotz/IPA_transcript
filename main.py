@@ -1,6 +1,5 @@
 import argparse
 from concurrent.futures import ThreadPoolExecutor
-from functools import lru_cache
 from io import TextIOWrapper
 import html as html_module
 import json
