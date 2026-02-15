@@ -1,4 +1,6 @@
 import argparse
+from concurrent.futures import ThreadPoolExecutor
+from functools import lru_cache
 from io import TextIOWrapper
 import html as html_module
 import json
@@ -6,7 +8,7 @@ import logging
 import re
 import string
 import subprocess
-from typing import List, Optional
+from typing import Dict, List, Optional, Tuple
 import unicodedata
 import os
 import nltk
@@ -18,19 +20,21 @@ nltk.download('punkt', quiet=True)
 nltk.download('punkt_tab', quiet=True)
 nltk.download('averaged_perceptron_tagger_eng', quiet=True)
 
+_pos_tag_cache: Dict[str, List[Tuple[str, str]]] = {}
+
+def _get_pos_tags(sentence: str) -> List[Tuple[str, str]]:
+    if sentence not in _pos_tag_cache:
+        tokens = word_tokenize(sentence)
+        _pos_tag_cache[sentence] = pos_tag(tokens)
+    return _pos_tag_cache[sentence]
+
 def is_verb_in_sentence(word, sentence):
-    # Tokenize the sentence into words
-    tokens = word_tokenize(sentence)
-
-    # Get POS tags for each word in the sentence
-    tagged_words = pos_tag(tokens)
-
-    # Find the POS tag of the target word in the tagged words list
+    tagged_words = _get_pos_tags(sentence)
+    word_lower = word.lower()
     for tagged_word, pos in tagged_words:
-        if tagged_word.lower() == word.lower():  # Case insensitive match
-            return pos.startswith('VB')  # Check if the tag starts with 'VB' (verb)
-
-    return False  # Word not found in sentence
+        if tagged_word.lower() == word_lower:
+            return pos.startswith('VB')
+    return False
 
 
 ipa_vowels = "aeiouɑɒæɛɪʊʌɔœøɐɘəɤɨɵɜɞɯɲɳɴɶʉʊʏ"
@@ -57,6 +61,14 @@ double_word_reductions = { "do you": "dju", "what did": "wʌd", "he has": "hiz",
 # These next few are not reduced often (For example - I should have it). I'll only reduce those before a verb, though I'm not sure it's the right call
 double_word_with_verb = {"could have": "cʊdə", "should have": "ʃʊdə", "would have": "wʊdə", "going to": "gɑnə"}
 # all noun+will can be reduced to x'll, but too hard for me to implement
+
+_double_word_lookup: Dict[str, List[Tuple[str, str, bool]]] = {}
+for _orig, _changed in double_word_reductions.items():
+    _first, _second = _orig.split(" ")
+    _double_word_lookup.setdefault(_first, []).append((_second, _changed, False))
+for _orig, _changed in double_word_with_verb.items():
+    _first, _second = _orig.split(" ")
+    _double_word_lookup.setdefault(_first, []).append((_second, _changed, True))
 
 # Most of those are not wrong, we just prefer it like this. These will be replced if appear in a word (good for plural and such):
 improved_pronounciations = {
@@ -140,23 +152,21 @@ def add_double_word_reductions(ipa_text: str, original_text: str):
     removed_words = 0
     for i in range(len(original_arr)):
         original_word = original_arr[i]
-        for orig, changed in list(double_word_reductions.items())+list(double_word_with_verb.items()):
-            first = orig.split(" ")[0]
-            if original_word == first:
-                second = orig.split(" ")[1]
-                if len(original_arr) > i + 1 and original_arr[i+1] == second:
-                    # validate that this is not the last word. last word in sentence don't get reduced
-                    next_char = get_next_char(original_arr, i+1, len(second)-1)
-                    if next_char != "":
-                        if second in ("will", "have", "has") and i + 2 < len(original_arr) and original_arr[i+2] == "not":
+        if original_word not in _double_word_lookup:
+            continue
+        for second, changed, needs_verb in _double_word_lookup[original_word]:
+            if len(original_arr) > i + 1 and original_arr[i+1] == second:
+                next_char = get_next_char(original_arr, i+1, len(second)-1)
+                if next_char != "":
+                    if second in ("will", "have", "has") and i + 2 < len(original_arr) and original_arr[i+2] == "not":
+                        continue
+                    if needs_verb:
+                        if not is_verb_in_sentence(original_arr[i+2], original_text):
                             continue
-                        if orig in double_word_with_verb:
-                            if not is_verb_in_sentence(original_arr[i+2], original_text):
-                                continue
 
-                        out_arr[i - removed_words] = changed
-                        del out_arr[i - removed_words + 1]
-                        removed_words += 1
+                    out_arr[i - removed_words] = changed
+                    del out_arr[i - removed_words + 1]
+                    removed_words += 1
     return " ".join(out_arr)
 
 def handle_t_d(ipa_text: str):
@@ -271,18 +281,22 @@ def fix_numbers(text_arr: List[str]):
 
 
 
+_flite_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'flite', 'bin', 'flite')
+
+def _call_flite(text: str) -> str:
+    try:
+        return subprocess.check_output([_flite_path, "-t", text, "-i"]).decode('utf-8')
+    except OSError:
+        logging.warning('lex_lookup (from flite) is not installed.')
+        return ''
+    except subprocess.CalledProcessError:
+        logging.warning('Non-zero exit status from lex_lookup.')
+        return ''
+
 def run_flite(text: str):
     fixed_text = text
     # fixed_text = " ".join(fix_numbers(fix_nn(text.lower())))
-    try:
-        flite_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'flite', 'bin', 'flite')
-        ipa_text = subprocess.check_output([flite_path, "-t", fixed_text, "-i"]).decode('utf-8')
-    except OSError:
-        logging.warning('lex_lookup (from flite) is not installed.')
-        ipa_text = ''
-    except subprocess.CalledProcessError:
-        logging.warning('Non-zero exit status from lex_lookup.')
-        ipa_text = ''
+    ipa_text = _call_flite(fixed_text)
 
     ipa_text = add_reductions_with_stress(ipa_text, fixed_text)
     ipa_text = add_double_word_reductions(ipa_text, fixed_text)
@@ -357,9 +371,60 @@ def remove_checkpoint(checkpoint_path):
     if os.path.exists(checkpoint_path):
         os.remove(checkpoint_path)
 
+FLITE_BATCH_SIZE = 32
+FLITE_MAX_WORKERS = 8
+
+def _run_flite_batch(texts: List[str]) -> List[Tuple[str, str]]:
+    with ThreadPoolExecutor(max_workers=FLITE_MAX_WORKERS) as executor:
+        ipa_results = list(executor.map(_call_flite, texts))
+    results = []
+    for fixed_text, ipa_text in zip(texts, ipa_results):
+        ipa_text = add_reductions_with_stress(ipa_text, fixed_text)
+        ipa_text = add_double_word_reductions(ipa_text, fixed_text)
+        ipa_text = handle_t_d(ipa_text)
+        ipa_text = ipa_text.replace("ˈ", "")
+        results.append((fixed_text, ipa_text))
+    return results
+
 def print_ipa(out_file: Optional[TextIOWrapper], lines: List[str], fix_line_ends: bool = True, checkpoint_path: Optional[str] = None, start_line: int = 0):
     global cached_text
     total = len(lines)
+
+    pending_texts: List[str] = []
+    pending_indices: List[int] = []
+    newline_positions: List[Tuple[int, str]] = []
+
+    def flush_batch():
+        if not pending_texts:
+            return
+        batch_results = _run_flite_batch(pending_texts)
+        result_idx = 0
+        all_outputs = []
+        for pos_idx, marker in newline_positions:
+            all_outputs.append((pos_idx, marker, None))
+        for i, (orig, ipa) in enumerate(batch_results):
+            all_outputs.append((pending_indices[i], None, (orig, ipa)))
+        all_outputs.sort(key=lambda x: x[0])
+        for _, marker, result in all_outputs:
+            if marker is not None:
+                if out_file:
+                    out_file.write(marker)
+                else:
+                    print(marker, end='')
+            else:
+                orig, ipa = result
+                if out_file:
+                    out_file.write(ipa)
+                    out_file.write(orig)
+                else:
+                    print((orig, ipa))
+        if out_file:
+            out_file.flush()
+        pending_texts.clear()
+        pending_indices.clear()
+        newline_positions.clear()
+
+    order_counter = 0
     for i, line in enumerate(lines):
         if i < start_line:
             continue
@@ -368,33 +433,28 @@ def print_ipa(out_file: Optional[TextIOWrapper], lines: List[str], fix_line_ends
             normalized_line = fix_line_ending(normalized_line)
             if normalized_line is None:
                 continue
-        if out_file:
-            if normalized_line == "\n":
-                out_file.write(normalized_line)
-                out_file.flush()
-                continue
-            orig, ipa = run_flite(normalized_line)
-            out_file.write(ipa)
-            out_file.write(orig)
-            out_file.flush()
-        else:
-            print(run_flite(normalized_line))
-        if checkpoint_path and (i + 1) % CHECKPOINT_INTERVAL == 0:
-            save_checkpoint(checkpoint_path, {
-                "lines_processed": i + 1,
-                "output_bytes": out_file.tell() if out_file else 0,
-                "cached_text": cached_text,
-                "line_end_count": line_end_count,
-                "is_chapter": is_chapter
-            })
+        if normalized_line == "\n":
+            newline_positions.append((order_counter, normalized_line))
+            order_counter += 1
+            continue
+        pending_texts.append(normalized_line)
+        pending_indices.append(order_counter)
+        order_counter += 1
+        if len(pending_texts) >= FLITE_BATCH_SIZE:
+            flush_batch()
+            if checkpoint_path:
+                save_checkpoint(checkpoint_path, {
+                    "lines_processed": i + 1,
+                    "output_bytes": out_file.tell() if out_file else 0,
+                    "cached_text": cached_text,
+                    "line_end_count": line_end_count,
+                    "is_chapter": is_chapter
+                })
     if cached_text != "":
-        if out_file:
-            orig, ipa = run_flite(cached_text)
-            out_file.write(ipa)
-            out_file.write(orig)
-            out_file.flush()
-        else:
-            print(run_flite(cached_text))
+        pending_texts.append(cached_text)
+        pending_indices.append(order_counter)
+        order_counter += 1
+    flush_batch()
     if checkpoint_path:
         save_checkpoint(checkpoint_path, {
             "lines_processed": total,
