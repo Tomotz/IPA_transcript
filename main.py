@@ -19,16 +19,9 @@ nltk.download('punkt', quiet=True)
 nltk.download('punkt_tab', quiet=True)
 nltk.download('averaged_perceptron_tagger_eng', quiet=True)
 
-_pos_tag_cache: Dict[str, List[Tuple[str, str]]] = {}
-
-def _get_pos_tags(sentence: str) -> List[Tuple[str, str]]:
-    if sentence not in _pos_tag_cache:
-        tokens = word_tokenize(sentence)
-        _pos_tag_cache[sentence] = pos_tag(tokens)
-    return _pos_tag_cache[sentence]
-
 def is_verb_in_sentence(word, sentence):
-    tagged_words = _get_pos_tags(sentence)
+    tokens = word_tokenize(sentence)
+    tagged_words = pos_tag(tokens)
     word_lower = word.lower()
     for tagged_word, pos in tagged_words:
         if tagged_word.lower() == word_lower:
@@ -482,38 +475,54 @@ def _decode_text_nodes(html_str: str) -> str:
             parts[i] = _decode_html_text(part)
     return ''.join(parts)
 
-def _process_single_paragraph(match: re.Match, paragraph_count: int, counter: int) -> str:
+def _prepare_paragraph_texts(match: re.Match):
     open_tag = match.group(1)
     inner = match.group(2)
     close_tag = match.group(3)
-
     plain_text = TAG_PATTERN.sub('', inner)
     decoded_text = _decode_html_text(plain_text)
     stripped = decoded_text.strip()
-
     decoded_inner = _decode_text_nodes(inner)
+    if not (stripped and any(c.isalpha() for c in stripped)):
+        return (open_tag, close_tag, decoded_inner, None, []), []
+    parts = re.split(r'(<[^>]*>)', inner)
+    flite_needed = []
+    for i, part in enumerate(parts):
+        if not part.startswith('<'):
+            decoded_part = _decode_html_text(part)
+            if decoded_part.strip() and any(c.isalpha() for c in decoded_part):
+                flite_needed.append((i, normalize(decoded_part), decoded_part))
+    return (open_tag, close_tag, decoded_inner, parts, flite_needed), [n for _, n, _ in flite_needed]
 
-    if stripped and any(c.isalpha() for c in stripped):
-        parts = re.split(r'(<[^>]*>)', inner)
-        ipa_parts = []
-        for part in parts:
-            if part.startswith('<'):
-                ipa_parts.append(part)
-            else:
-                decoded_part = _decode_html_text(part)
-                if decoded_part.strip() and any(c.isalpha() for c in decoded_part):
-                    normalized = normalize(decoded_part)
-                    _, ipa = run_flite(normalized)
-                    leading = decoded_part[:len(decoded_part) - len(decoded_part.lstrip())]
-                    trailing = decoded_part[len(decoded_part.rstrip()):]
-                    ipa_parts.append(leading + ipa.strip() + trailing)
-                else:
-                    ipa_parts.append(decoded_part)
-        ipa_inner = ''.join(ipa_parts)
-        print(f"paragraph {counter} / {paragraph_count}")
-        return open_tag + ipa_inner + close_tag + '\n' + open_tag + decoded_inner + close_tag
+def _assemble_paragraph(prep_data, flite_results, paragraph_count, counter):
+    open_tag, close_tag, decoded_inner, parts, flite_needed = prep_data
+    if parts is None:
+        return open_tag + decoded_inner + close_tag
+    result_map = {}
+    for idx, (part_i, _, decoded_part) in enumerate(flite_needed):
+        result_map[part_i] = (decoded_part, flite_results[idx])
+    ipa_parts = []
+    for i, part in enumerate(parts):
+        if part.startswith('<'):
+            ipa_parts.append(part)
+        elif i in result_map:
+            decoded_part, ipa = result_map[i]
+            leading = decoded_part[:len(decoded_part) - len(decoded_part.lstrip())]
+            trailing = decoded_part[len(decoded_part.rstrip()):]
+            ipa_parts.append(leading + ipa.strip() + trailing)
+        else:
+            ipa_parts.append(_decode_html_text(part))
+    ipa_inner = ''.join(ipa_parts)
+    print(f"paragraph {counter} / {paragraph_count}")
+    return open_tag + ipa_inner + close_tag + '\n' + open_tag + decoded_inner + close_tag
 
-    return open_tag + decoded_inner + close_tag
+def _process_single_paragraph(match: re.Match, paragraph_count: int, counter: int) -> str:
+    prep_data, normalized_texts = _prepare_paragraph_texts(match)
+    flite_results = []
+    for text in normalized_texts:
+        _, ipa = run_flite(text)
+        flite_results.append(ipa)
+    return _assemble_paragraph(prep_data, flite_results, paragraph_count, counter)
 
 def process_html_file(input_path: str, output_path: Optional[str], resume: bool = False):
     with open(input_path, 'r', encoding='utf-8') as f:
@@ -545,19 +554,39 @@ def process_html_file(input_path: str, output_path: Optional[str], resume: bool 
 
     mode = "a" if start_paragraph > 0 else "w"
     out_file = open(output_path, mode, encoding='utf-8')
-    prev_end = 0
+    prev_end = matches[start_paragraph - 1].end() if start_paragraph > 0 else 0
 
-    for idx, match in enumerate(matches):
-        if idx < start_paragraph:
+    for batch_start in range(start_paragraph, len(matches), FLITE_BATCH_SIZE):
+        batch_end = min(batch_start + FLITE_BATCH_SIZE, len(matches))
+        batch_prep = []
+        all_normalized = []
+        text_counts = []
+        for idx in range(batch_start, batch_end):
+            prep_data, normalized_texts = _prepare_paragraph_texts(matches[idx])
+            batch_prep.append((idx, prep_data))
+            all_normalized.extend(normalized_texts)
+            text_counts.append(len(normalized_texts))
+        with ThreadPoolExecutor(max_workers=FLITE_MAX_WORKERS) as executor:
+            all_ipa_raw = list(executor.map(_call_flite, all_normalized))
+        all_flite_results = []
+        for raw_ipa, normalized in zip(all_ipa_raw, all_normalized):
+            ipa = add_reductions_with_stress(raw_ipa, normalized)
+            ipa = add_double_word_reductions(ipa, normalized)
+            ipa = handle_t_d(ipa)
+            ipa = ipa.replace("ˈ", "")
+            all_flite_results.append(ipa)
+        result_offset = 0
+        for (idx, prep_data), count in zip(batch_prep, text_counts):
+            flite_results = all_flite_results[result_offset:result_offset + count]
+            result_offset += count
+            match = matches[idx]
+            out_file.write(content[prev_end:match.start()])
+            out_file.write(_assemble_paragraph(prep_data, flite_results, paragraph_count, idx + 1))
+            out_file.flush()
             prev_end = match.end()
-            continue
-        out_file.write(content[prev_end:match.start()])
-        out_file.write(_process_single_paragraph(match, paragraph_count, idx + 1))
-        out_file.flush()
-        prev_end = match.end()
         if checkpoint_path:
             save_checkpoint(checkpoint_path, {
-                "paragraphs_processed": idx + 1,
+                "paragraphs_processed": batch_end,
                 "output_bytes": out_file.tell()
             })
 
