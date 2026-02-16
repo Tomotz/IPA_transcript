@@ -112,7 +112,6 @@ def get_prev_char(text: list, word_idx: int, letter_idx: int) -> str:
         return text[word_idx - 1][-1]
     return ""
 
-
 def add_reductions_with_stress(ipa_text: str, original_text: str):
     # here we still have the stress sine, and t/d's weren't handled yet
     out_text = ipa_text.split(" ")
@@ -213,7 +212,6 @@ def handle_t_d(ipa_text: str):
         out_text[i] = out_word
     return " ".join(out_text)
 
-
 def normalize(text: str):
     text = text.replace("’", "'").replace("‘", "'").replace('”', '"').replace('“', '"').replace("—", " - ")
     text = unicodedata.normalize('NFD', text)
@@ -272,8 +270,6 @@ def fix_numbers(text_arr: List[str]):
             text_arr[i] == word.replace("11", "ll")
         i+=1
     return text_arr
-
-
 
 _flite_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'flite', 'bin', 'flite')
 
@@ -456,9 +452,6 @@ def print_ipa(out_file: Optional[TextIOWrapper], lines: List[str], fix_line_ends
             "line_end_count": 0,
             "is_chapter": False
         })
-
-
-
 
 PARAGRAPH_PATTERN = re.compile(r'(<p\b[^>]*>)(.*?)(</p>)', re.DOTALL | re.IGNORECASE)
 TAG_PATTERN = re.compile(r'<[^>]*>')
