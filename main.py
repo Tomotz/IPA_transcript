@@ -455,6 +455,20 @@ def print_ipa(out_file: Optional[TextIOWrapper], lines: List[str], fix_line_ends
 
 PARAGRAPH_PATTERN = re.compile(r'(<p\b[^>]*>)(.*?)(</p>)', re.DOTALL | re.IGNORECASE)
 TAG_PATTERN = re.compile(r'<[^>]*>')
+SKIP_TAGS = {'script', 'style', 'head', 'noscript', 'svg', 'nav', 'footer'}
+SKIP_TAG_PATTERN = re.compile(
+    r'<(?P<tag>' + '|'.join(SKIP_TAGS) + r')\b[^>]*>.*?</(?P=tag)>',
+    re.DOTALL | re.IGNORECASE
+)
+
+def _get_skip_ranges(content: str) -> List[Tuple[int, int]]:
+    return [(m.start(), m.end()) for m in SKIP_TAG_PATTERN.finditer(content)]
+
+def _in_skip_range(pos: int, skip_ranges: List[Tuple[int, int]]) -> bool:
+    for start, end in skip_ranges:
+        if start <= pos < end:
+            return True
+    return False
 
 def _decode_html_text(text: str) -> str:
     decoded = html_module.unescape(text)
@@ -524,7 +538,8 @@ def process_html_file(input_path: str, output_path: Optional[str], resume: bool 
     with open(input_path, 'r', encoding='utf-8') as f:
         content = f.read()
 
-    matches = list(PARAGRAPH_PATTERN.finditer(content))
+    skip_ranges = _get_skip_ranges(content)
+    matches = [m for m in PARAGRAPH_PATTERN.finditer(content) if not _in_skip_range(m.start(), skip_ranges)]
     paragraph_count = len(matches)
 
     checkpoint_path = get_checkpoint_path(output_path) if output_path else None
@@ -543,6 +558,8 @@ def process_html_file(input_path: str, output_path: Optional[str], resume: bool 
     if not output_path:
         counter = [0]
         def replace_paragraph(match):
+            if _in_skip_range(match.start(), skip_ranges):
+                return match.group(0)
             counter[0] += 1
             return _process_single_paragraph(match, paragraph_count, counter[0])
         print(PARAGRAPH_PATTERN.sub(replace_paragraph, content))
@@ -671,3 +688,4 @@ def main():
 if __name__ == "__main__":
     main()
 
+    
