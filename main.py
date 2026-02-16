@@ -9,6 +9,7 @@ import logging
 import re
 import string
 import subprocess
+import sys
 from typing import Dict, List, Optional, Tuple
 import unicodedata
 import os
@@ -555,19 +556,11 @@ def process_html_file(input_path: str, output_path: Optional[str], resume: bool 
                 with open(output_path, "r+b") as f:
                     f.truncate(output_bytes)
 
-    if not output_path:
-        prev_end = 0
-        result_parts = []
-        for counter, match in enumerate(matches, 1):
-            result_parts.append(content[prev_end:match.start()])
-            result_parts.append(_process_single_paragraph(match, paragraph_count, counter))
-            prev_end = match.end()
-        result_parts.append(content[prev_end:])
-        print(''.join(result_parts))
-        return
-
-    mode = "a" if start_paragraph > 0 else "w"
-    out_file = open(output_path, mode, encoding='utf-8')
+    if output_path:
+        mode = "a" if start_paragraph > 0 else "w"
+        out_file = open(output_path, mode, encoding='utf-8')
+    else:
+        out_file = sys.stdout
     prev_end = matches[start_paragraph - 1].end() if start_paragraph > 0 else 0
 
     for batch_start in range(start_paragraph, len(matches), FLITE_BATCH_SIZE):
@@ -606,7 +599,8 @@ def process_html_file(input_path: str, output_path: Optional[str], resume: bool 
 
     out_file.write(content[prev_end:])
     out_file.flush()
-    out_file.close()
+    if output_path:
+        out_file.close()
     if checkpoint_path:
         remove_checkpoint(checkpoint_path)
 
