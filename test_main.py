@@ -421,7 +421,8 @@ class TestProcessHtmlFileIntegration:
         process_html_file(str(input_file), str(output_file))
         result = output_file.read_text(encoding="utf-8")
         assert "<h1>Title</h1>" in result
-        assert "<title>Test</title>" in result
+        assert "<head>" not in result
+        assert "<title>" not in result
 
     def test_empty_paragraph_no_crash(self, tmp_path):
         html = "<html><body><p></p><p>Real content here.</p></body></html>"

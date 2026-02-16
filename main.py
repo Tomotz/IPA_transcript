@@ -462,14 +462,6 @@ SKIP_TAG_PATTERN = re.compile(
     re.DOTALL | re.IGNORECASE
 )
 
-def _get_skip_ranges(content: str) -> List[Tuple[int, int]]:
-    return [(m.start(), m.end()) for m in SKIP_TAG_PATTERN.finditer(content)]
-
-def _in_skip_range(pos: int, skip_ranges: List[Tuple[int, int]]) -> bool:
-    for start, end in skip_ranges:
-        if start <= pos < end:
-            return True
-    return False
 
 def _decode_html_text(text: str) -> str:
     decoded = html_module.unescape(text)
@@ -539,8 +531,8 @@ def process_html_file(input_path: str, output_path: Optional[str], resume: bool 
     with open(input_path, 'r', encoding='utf-8') as f:
         content = f.read()
 
-    skip_ranges = _get_skip_ranges(content)
-    matches = [m for m in PARAGRAPH_PATTERN.finditer(content) if not _in_skip_range(m.start(), skip_ranges)]
+    content = SKIP_TAG_PATTERN.sub('', content)
+    matches = list(PARAGRAPH_PATTERN.finditer(content))
     paragraph_count = len(matches)
 
     checkpoint_path = get_checkpoint_path(output_path) if output_path else None
