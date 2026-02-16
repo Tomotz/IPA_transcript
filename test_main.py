@@ -22,6 +22,7 @@ from main import (
     remove_checkpoint,
     _decode_html_text,
     _decode_text_nodes,
+    _strip_divs_by_id,
     process_html_file,
     is_verb_in_sentence,
     ipa_vowels,
@@ -325,6 +326,47 @@ class TestConstants:
 
     def test_double_word_reductions_non_empty(self):
         assert len(double_word_reductions) > 0
+
+
+class TestStripDivsById:
+    def test_strips_secondary_div(self):
+        html = '<body><div id="secondary"><p>sidebar</p></div><p>main</p></body>'
+        result = _strip_divs_by_id(html)
+        assert 'secondary' not in result
+        assert 'sidebar' not in result
+        assert '<p>main</p>' in result
+
+    def test_strips_actionbar_div(self):
+        html = '<body><div id="actionbar"><button>Click</button></div><p>content</p></body>'
+        result = _strip_divs_by_id(html)
+        assert 'actionbar' not in result
+        assert 'Click' not in result
+        assert '<p>content</p>' in result
+
+    def test_handles_nested_divs(self):
+        html = '<div id="secondary"><div class="inner"><p>nested</p></div></div><p>kept</p>'
+        result = _strip_divs_by_id(html)
+        assert 'secondary' not in result
+        assert 'nested' not in result
+        assert '<p>kept</p>' in result
+
+    def test_preserves_other_divs(self):
+        html = '<div id="primary"><p>main</p></div><div id="secondary"><p>side</p></div>'
+        result = _strip_divs_by_id(html)
+        assert '<div id="primary">' in result
+        assert '<p>main</p>' in result
+        assert 'secondary' not in result
+
+    def test_strips_both_ids(self):
+        html = '<div id="secondary">A</div><div id="actionbar">B</div><p>C</p>'
+        result = _strip_divs_by_id(html)
+        assert 'secondary' not in result
+        assert 'actionbar' not in result
+        assert '<p>C</p>' in result
+
+    def test_no_matching_divs_unchanged(self):
+        html = '<div id="content"><p>hello</p></div>'
+        assert _strip_divs_by_id(html) == html
 
 
 def _flite_available():

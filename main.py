@@ -461,6 +461,35 @@ SKIP_TAG_PATTERN = re.compile(
     r'<(?P<tag>' + '|'.join(SKIP_TAGS) + r')\b[^>]*>.*?</(?P=tag)>',
     re.DOTALL | re.IGNORECASE
 )
+SKIP_DIV_IDS = {'secondary', 'actionbar'}
+_SKIP_DIV_OPEN = re.compile(
+    r'<div\b[^>]*\bid\s*=\s*["\'](' + '|'.join(SKIP_DIV_IDS) + r')["\'][^>]*>',
+    re.IGNORECASE
+)
+_DIV_OPEN = re.compile(r'<div\b', re.IGNORECASE)
+_DIV_CLOSE = re.compile(r'</div\s*>', re.IGNORECASE)
+
+def _strip_divs_by_id(content: str) -> str:
+    """Remove <div id="secondary"> and <div id="actionbar"> blocks, handling nested divs."""
+    while True:
+        m = _SKIP_DIV_OPEN.search(content)
+        if not m:
+            break
+        depth = 1
+        pos = m.end()
+        while depth > 0 and pos < len(content):
+            open_m = _DIV_OPEN.search(content, pos)
+            close_m = _DIV_CLOSE.search(content, pos)
+            if close_m is None:
+                break
+            if open_m and open_m.start() < close_m.start():
+                depth += 1
+                pos = open_m.end()
+            else:
+                depth -= 1
+                pos = close_m.end()
+        content = content[:m.start()] + content[pos:]
+    return content
 
 
 def _decode_html_text(text: str) -> str:
@@ -532,6 +561,7 @@ def process_html_file(input_path: str, output_path: Optional[str], resume: bool 
         content = f.read()
 
     content = SKIP_TAG_PATTERN.sub('', content)
+    content = _strip_divs_by_id(content)
     matches = list(PARAGRAPH_PATTERN.finditer(content))
     paragraph_count = len(matches)
 
