@@ -456,7 +456,7 @@ def print_ipa(out_file: Optional[TextIOWrapper], lines: List[str], fix_line_ends
 
 PARAGRAPH_PATTERN = re.compile(r'(<p\b[^>]*>)(.*?)(</p>)', re.DOTALL | re.IGNORECASE)
 TAG_PATTERN = re.compile(r'<[^>]*>')
-SKIP_TAGS = {'script', 'style', 'head', 'noscript', 'svg', 'nav', 'footer'}
+SKIP_TAGS = {'script', 'style', 'head', 'noscript', 'svg', 'nav', 'footer'} #link, meta
 SKIP_TAG_PATTERN = re.compile(
     r'<(?P<tag>' + '|'.join(SKIP_TAGS) + r')\b[^>]*>.*?</(?P=tag)>',
     re.DOTALL | re.IGNORECASE
@@ -523,7 +523,7 @@ def _assemble_paragraph(prep_data, flite_results, paragraph_count, counter):
         else:
             ipa_parts.append(_decode_html_text(part))
     ipa_inner = ''.join(ipa_parts)
-    if counter % max(1, (paragraph_count // 100)) == 0:
+    if counter % max(10, (paragraph_count // 100)) == 0:
         print(f"paragraph {counter} / {paragraph_count}")
     return open_tag + ipa_inner + close_tag + '\n' + open_tag + decoded_inner + close_tag
 
@@ -683,4 +683,3 @@ def main():
 if __name__ == "__main__":
     main()
 
-    
