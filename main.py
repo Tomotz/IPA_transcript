@@ -461,6 +461,41 @@ SKIP_TAG_PATTERN = re.compile(
     r'<(?P<tag>' + '|'.join(SKIP_TAGS) + r')\b[^>]*>.*?</(?P=tag)>',
     re.DOTALL | re.IGNORECASE
 )
+# Each rule is (tag, attr, value) — elements matching <tag ... attr="value" ...> will be stripped.
+SKIP_ATTR_RULES = [
+    ('div', 'id', 'secondary'),
+    ('div', 'id', 'actionbar'),
+]
+
+def _strip_tags_by_attr(content: str, rules=SKIP_ATTR_RULES) -> str:
+    """Remove elements matching (tag, attr, value) rules, handling nesting."""
+    for tag_name, attr, value in rules:
+        pattern = re.compile(
+            r'<' + re.escape(tag_name) + r'\b[^>]*\b'
+            + re.escape(attr) + r'\s*=\s*["\']' + re.escape(value) + r'["\'][^>]*>',
+            re.IGNORECASE
+        )
+        while True:
+            m = pattern.search(content)
+            if not m:
+                break
+            tag_open = re.compile(r'<' + re.escape(tag_name) + r'\b', re.IGNORECASE)
+            tag_close = re.compile(r'</' + re.escape(tag_name) + r'\s*>', re.IGNORECASE)
+            depth = 1
+            pos = m.end()
+            while depth > 0 and pos < len(content):
+                open_m = tag_open.search(content, pos)
+                close_m = tag_close.search(content, pos)
+                if close_m is None:
+                    break
+                if open_m and open_m.start() < close_m.start():
+                    depth += 1
+                    pos = open_m.end()
+                else:
+                    depth -= 1
+                    pos = close_m.end()
+            content = content[:m.start()] + content[pos:]
+    return content
 
 
 def _decode_html_text(text: str) -> str:
@@ -532,6 +567,7 @@ def process_html_file(input_path: str, output_path: Optional[str], resume: bool 
         content = f.read()
 
     content = SKIP_TAG_PATTERN.sub('', content)
+    content = _strip_tags_by_attr(content)
     matches = list(PARAGRAPH_PATTERN.finditer(content))
     paragraph_count = len(matches)
 
