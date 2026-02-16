@@ -375,16 +375,21 @@ class TestStripTagsByAttr:
         assert 'sidebar' not in result
         assert '<p>main</p>' in result
 
-    def test_strips_non_div_tag(self):
+    def test_strips_non_div_tag_with_custom_rule(self):
         html = '<section id="secondary"><p>inside</p></section><p>outside</p>'
-        result = _strip_tags_by_attr(html)
+        result = _strip_tags_by_attr(html, rules=[('section', 'id', 'secondary')])
         assert 'secondary' not in result
         assert 'inside' not in result
         assert '<p>outside</p>' in result
 
+    def test_does_not_strip_non_div_by_default(self):
+        html = '<section id="secondary"><p>inside</p></section><p>outside</p>'
+        result = _strip_tags_by_attr(html)
+        assert '<section id="secondary">' in result
+
     def test_custom_rules(self):
         html = '<div class="ads"><p>ad</p></div><p>content</p>'
-        result = _strip_tags_by_attr(html, rules=[('class', 'ads')])
+        result = _strip_tags_by_attr(html, rules=[('div', 'class', 'ads')])
         assert 'ads' not in result
         assert '<p>content</p>' in result
 

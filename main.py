@@ -461,17 +461,17 @@ SKIP_TAG_PATTERN = re.compile(
     r'<(?P<tag>' + '|'.join(SKIP_TAGS) + r')\b[^>]*>.*?</(?P=tag)>',
     re.DOTALL | re.IGNORECASE
 )
-# Each rule is (attr, value) — any tag with that attribute=value will be stripped.
+# Each rule is (tag, attr, value) — elements matching <tag ... attr="value" ...> will be stripped.
 SKIP_ATTR_RULES = [
-    ('id', 'secondary'),
-    ('id', 'actionbar'),
+    ('div', 'id', 'secondary'),
+    ('div', 'id', 'actionbar'),
 ]
 
 def _strip_tags_by_attr(content: str, rules=SKIP_ATTR_RULES) -> str:
-    """Remove any element whose opening tag matches an (attr, value) rule, handling nesting."""
-    for attr, value in rules:
+    """Remove elements matching (tag, attr, value) rules, handling nesting."""
+    for tag_name, attr, value in rules:
         pattern = re.compile(
-            r'<(?P<tag>[a-zA-Z][a-zA-Z0-9]*)\b[^>]*\b'
+            r'<' + re.escape(tag_name) + r'\b[^>]*\b'
             + re.escape(attr) + r'\s*=\s*["\']' + re.escape(value) + r'["\'][^>]*>',
             re.IGNORECASE
         )
@@ -479,9 +479,8 @@ def _strip_tags_by_attr(content: str, rules=SKIP_ATTR_RULES) -> str:
             m = pattern.search(content)
             if not m:
                 break
-            tag = m.group('tag')
-            tag_open = re.compile(r'<' + re.escape(tag) + r'\b', re.IGNORECASE)
-            tag_close = re.compile(r'</' + re.escape(tag) + r'\s*>', re.IGNORECASE)
+            tag_open = re.compile(r'<' + re.escape(tag_name) + r'\b', re.IGNORECASE)
+            tag_close = re.compile(r'</' + re.escape(tag_name) + r'\s*>', re.IGNORECASE)
             depth = 1
             pos = m.end()
             while depth > 0 and pos < len(content):
