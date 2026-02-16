@@ -556,13 +556,14 @@ def process_html_file(input_path: str, output_path: Optional[str], resume: bool 
                     f.truncate(output_bytes)
 
     if not output_path:
-        counter = [0]
-        def replace_paragraph(match):
-            if _in_skip_range(match.start(), skip_ranges):
-                return match.group(0)
-            counter[0] += 1
-            return _process_single_paragraph(match, paragraph_count, counter[0])
-        print(PARAGRAPH_PATTERN.sub(replace_paragraph, content))
+        prev_end = 0
+        result_parts = []
+        for counter, match in enumerate(matches, 1):
+            result_parts.append(content[prev_end:match.start()])
+            result_parts.append(_process_single_paragraph(match, paragraph_count, counter))
+            prev_end = match.end()
+        result_parts.append(content[prev_end:])
+        print(''.join(result_parts))
         return
 
     mode = "a" if start_paragraph > 0 else "w"
