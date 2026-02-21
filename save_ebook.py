@@ -4,8 +4,8 @@
 
 import requests
 
-base = "https://twigserial.wordpress.com"
-chapters = [
+twig_base = "https://twigserial.wordpress.com"
+twig_chapters = [
 "?cat=335145234",
 "?cat=289739",
 "?cat=20203420",
@@ -349,20 +349,341 @@ chapters = [
 "?cat=109800200",
 ]
 
-with open("twig_full.html", "w", encoding="utf-8") as out:
-    with open("links.txt", "w", encoding="utf-8") as link_out:
-        for chapter in chapters:
-            url = f"{base}/{chapter}"
-            r = requests.get(url, allow_redirects=True)
-            # r = requests.get(url)
-            # get the real URL that should look something like https://twigserial.wordpress.com/category/story/arc-1-taking-root/1-01/ and check the text before the last slash
-            real_url = r.url
-            if len(real_url.split("/")) < 8:
-                continue
-            data = real_url.split("/")[-1]
-            if len(data) == 0:
-                data = real_url.split("/")[-2]
-            print(real_url)
-            link_out.write(real_url + "\n")
-            out.write(r.text)
-            out.write("\n\n" + "="*50 + "\n\n")
+pale_chapters = """https://palewebserial.wordpress.com/2020/05/05/blood-run-cold-0-0/
+https://palewebserial.wordpress.com/2020/05/09/lost-for-words-1-1/
+https://palewebserial.wordpress.com/2020/05/12/lost-for-words-1-2/
+https://palewebserial.wordpress.com/2020/05/16/lost-for-words-1-3/
+https://palewebserial.wordpress.com/2020/05/19/lost-for-words-1-4/
+https://palewebserial.wordpress.com/2020/05/23/lost-for-words-1-5/
+https://palewebserial.wordpress.com/2020/05/26/lost-for-words-1-6/
+https://palewebserial.wordpress.com/2020/05/30/lost-for-words-1-7/
+https://palewebserial.wordpress.com/2020/06/02/lost-for-words-1-8/
+https://palewebserial.wordpress.com/2020/06/06/lost-for-words-1-z/
+https://palewebserial.wordpress.com/2020/06/09/stolen-away-2-1/
+https://palewebserial.wordpress.com/2020/06/13/stolen-away-2-2/
+https://palewebserial.wordpress.com/2020/06/16/stolen-away-2-3/
+https://palewebserial.wordpress.com/2020/06/20/stolen-away-2-4/
+https://palewebserial.wordpress.com/2020/06/23/stolen-away-2-5/
+https://palewebserial.wordpress.com/2020/06/27/stolen-away-2-6/
+https://palewebserial.wordpress.com/2020/06/30/stolen-away-2-7/
+https://palewebserial.wordpress.com/2020/07/04/stolen-away-2-8/
+https://palewebserial.wordpress.com/2020/07/07/stolen-away-2-9/
+https://palewebserial.wordpress.com/2020/07/11/stolen-away-2-z/
+https://palewebserial.wordpress.com/2020/07/14/out-on-a-limb-3-1/
+https://palewebserial.wordpress.com/2020/07/18/out-on-a-limb-3-2/
+https://palewebserial.wordpress.com/2020/07/21/out-on-a-limb-3-3/
+https://palewebserial.wordpress.com/2020/07/25/out-on-a-limb-3-4/
+https://palewebserial.wordpress.com/2020/07/28/out-on-a-limb-3-5/
+https://palewebserial.wordpress.com/2020/08/01/out-on-a-limb-3-6/
+https://palewebserial.wordpress.com/2020/08/04/out-on-a-limb-3-7/
+https://palewebserial.wordpress.com/2020/08/08/out-on-a-limb-3-8/
+https://palewebserial.wordpress.com/2020/08/11/out-on-a-limb-3-9/
+https://palewebserial.wordpress.com/2020/08/15/out-on-a-limb-3-z/
+https://palewebserial.wordpress.com/2020/08/18/leaving-a-mark-4-1/
+https://palewebserial.wordpress.com/2020/08/22/leaving-a-mark-4-2/
+https://palewebserial.wordpress.com/2020/08/25/leaving-a-mark-4-3/
+https://palewebserial.wordpress.com/2020/08/29/leaving-a-mark-4-4/
+https://palewebserial.wordpress.com/2020/09/01/leaving-a-mark-4-5/
+https://palewebserial.wordpress.com/2020/09/05/leaving-a-mark-4-6/
+https://palewebserial.wordpress.com/2020/09/08/leaving-a-mark-4-7/
+https://palewebserial.wordpress.com/2020/09/12/leaving-a-mark-4-x/
+https://palewebserial.wordpress.com/2020/09/15/leaving-a-mark-4-8/
+https://palewebserial.wordpress.com/2020/09/19/leaving-a-mark-4-9/
+https://palewebserial.wordpress.com/2020/09/22/leaving-a-mark-4-10/
+https://palewebserial.wordpress.com/2020/09/26/back-away-5-a/
+https://palewebserial.wordpress.com/2020/09/29/back-away-5-b/
+https://palewebserial.wordpress.com/2020/10/03/back-away-5-1/
+https://palewebserial.wordpress.com/2020/10/06/back-away-5-2/
+https://palewebserial.wordpress.com/2020/10/10/back-away-5-3/
+https://palewebserial.wordpress.com/2020/10/13/back-away-5-4/
+https://palewebserial.wordpress.com/2020/10/17/back-away-5-c/
+https://palewebserial.wordpress.com/2020/10/20/back-away-5-5/
+https://palewebserial.wordpress.com/2020/10/24/back-away-5-d/
+https://palewebserial.wordpress.com/2020/10/27/cutting-class-6-1/
+https://palewebserial.wordpress.com/2020/10/31/cutting-class-6-2/
+https://palewebserial.wordpress.com/2020/11/03/cutting-class-6-3/
+https://palewebserial.wordpress.com/2020/11/07/cutting-class-6-4/
+https://palewebserial.wordpress.com/2020/11/10/cutting-class-6-5/
+https://palewebserial.wordpress.com/2020/11/14/cutting-class-6-6/
+https://palewebserial.wordpress.com/2020/11/17/cutting-class-6-7/
+https://palewebserial.wordpress.com/2020/11/21/cutting-class-6-8/
+https://palewebserial.wordpress.com/2020/11/24/cutting-class-6-9/
+https://palewebserial.wordpress.com/2020/11/28/cutting-class-6-z/
+https://palewebserial.wordpress.com/2020/12/01/gone-ahead-7-1/
+https://palewebserial.wordpress.com/2020/12/05/gone-ahead-7-2/
+https://palewebserial.wordpress.com/2020/12/08/gone-ahead-7-3/
+https://palewebserial.wordpress.com/2020/12/12/gone-ahead-7-4/
+https://palewebserial.wordpress.com/2020/12/15/gone-ahead-7-5/
+https://palewebserial.wordpress.com/2020/12/19/gone-ahead-7-6/
+https://palewebserial.wordpress.com/2020/12/22/gone-ahead-7-a/
+https://palewebserial.wordpress.com/2020/12/26/gone-ahead-7-7/
+https://palewebserial.wordpress.com/2020/12/29/gone-ahead-7-8/
+https://palewebserial.wordpress.com/2021/01/02/gone-ahead-7-9/
+https://palewebserial.wordpress.com/2021/01/05/gone-ahead-7-x/
+https://palewebserial.wordpress.com/2021/01/09/vanishing-points-8-1/
+https://palewebserial.wordpress.com/2021/01/12/vanishing-points-8-2/
+https://palewebserial.wordpress.com/2021/01/16/vanishing-points-8-3/
+https://palewebserial.wordpress.com/2021/01/19/vanishing-points-8-4/
+https://palewebserial.wordpress.com/2021/01/23/vanishing-points-8-5/
+https://palewebserial.wordpress.com/2021/01/26/vanishing-points-8-a/
+https://palewebserial.wordpress.com/2021/01/30/vanishing-points-8-6/
+https://palewebserial.wordpress.com/2021/02/02/vanishing-points-8-7/
+https://palewebserial.wordpress.com/2021/02/06/vanishing-points-8-8/
+https://palewebserial.wordpress.com/2021/02/09/shaking-hands-9-1/
+https://palewebserial.wordpress.com/2021/02/13/shaking-hands-9-2/
+https://palewebserial.wordpress.com/2021/02/16/shaking-hands-9-3/
+https://palewebserial.wordpress.com/2021/02/20/shaking-hands-9-4/
+https://palewebserial.wordpress.com/2021/02/23/shaking-hands-9-5/
+https://palewebserial.wordpress.com/2021/02/27/shaking-hands-9-6/
+https://palewebserial.wordpress.com/2021/03/02/shaking-hands-9-7/
+https://palewebserial.wordpress.com/2021/03/06/shaking-hands-9-8/
+https://palewebserial.wordpress.com/2021/03/09/shaking-hands-9-9/
+https://palewebserial.wordpress.com/2021/03/13/shaking-hands-9-10/
+https://palewebserial.wordpress.com/2021/03/16/shaking-hands-9-11/
+https://palewebserial.wordpress.com/2021/03/20/shaking-hands-9-12/
+https://palewebserial.wordpress.com/2021/03/23/shaking-hands-9-z/
+https://palewebserial.wordpress.com/2021/03/27/one-after-another-10-1/
+https://palewebserial.wordpress.com/2021/03/30/one-after-another-10-a/
+https://palewebserial.wordpress.com/2021/04/03/one-after-another-10-b/
+https://palewebserial.wordpress.com/2021/04/06/one-after-another-10-c/
+https://palewebserial.wordpress.com/2021/04/10/one-after-another-10-2/
+https://palewebserial.wordpress.com/2021/04/13/one-after-another-10-d/
+https://palewebserial.wordpress.com/2021/04/17/one-after-another-10-e/
+https://palewebserial.wordpress.com/2021/04/20/one-after-another-10-3/
+https://palewebserial.wordpress.com/2021/04/24/one-after-another-10-4/
+https://palewebserial.wordpress.com/2021/04/27/one-after-another-10-z/
+https://palewebserial.wordpress.com/2021/05/01/dash-to-pieces-11-1/
+https://palewebserial.wordpress.com/2021/05/04/dash-to-pieces-11-2/
+https://palewebserial.wordpress.com/2021/05/08/dash-to-pieces-11-3/
+https://palewebserial.wordpress.com/2021/05/11/dash-to-pieces-11-4/
+https://palewebserial.wordpress.com/2021/05/15/dash-to-pieces-11-5/
+https://palewebserial.wordpress.com/2021/05/18/dash-to-pieces-11-6/
+https://palewebserial.wordpress.com/2021/05/22/dash-to-pieces-11-7/
+https://palewebserial.wordpress.com/2021/05/25/dash-to-pieces-11-8/
+https://palewebserial.wordpress.com/2021/05/29/dash-to-pieces-11-9/
+https://palewebserial.wordpress.com/2021/06/01/dash-to-pieces-11-10/
+https://palewebserial.wordpress.com/2021/06/05/dash-to-pieces-11-11/
+https://palewebserial.wordpress.com/2021/06/08/dash-to-pieces-11-12/
+https://palewebserial.wordpress.com/2021/06/12/dash-to-pieces-11-13/
+https://palewebserial.wordpress.com/2021/06/15/dash-to-pieces-11-z/
+https://palewebserial.wordpress.com/2021/06/19/false-moves-12-1/
+https://palewebserial.wordpress.com/2021/06/22/false-move-12a/
+https://palewebserial.wordpress.com/2021/06/26/false-moves-12-2/
+https://palewebserial.wordpress.com/2021/06/29/false-moves-12-3/
+https://palewebserial.wordpress.com/2021/07/03/false-moves-12-4/
+https://palewebserial.wordpress.com/2021/07/06/false-moves-12-5/
+https://palewebserial.wordpress.com/2021/07/10/false-moves-12-6/
+https://palewebserial.wordpress.com/2021/07/14/false-moves-12-7/
+https://palewebserial.wordpress.com/2021/07/17/false-moves-12-a/
+https://palewebserial.wordpress.com/2021/07/20/false-moves-12-8/
+https://palewebserial.wordpress.com/2021/07/24/false-moves-12-9/
+https://palewebserial.wordpress.com/2021/07/27/false-moves-12-10/
+https://palewebserial.wordpress.com/2021/07/31/false-moves-12-z/
+https://palewebserial.wordpress.com/2021/08/03/summer-break-13-1/
+https://palewebserial.wordpress.com/2021/08/07/summer-break-13-2/
+https://palewebserial.wordpress.com/2021/08/10/summer-break-13-3/
+https://palewebserial.wordpress.com/2021/08/14/summer-break-13-4/
+https://palewebserial.wordpress.com/2021/08/17/summer-break-13-5/
+https://palewebserial.wordpress.com/2021/08/21/summer-break-13-6/
+https://palewebserial.wordpress.com/2021/08/24/summer-break-13-7/
+https://palewebserial.wordpress.com/2021/08/28/summer-break-13-8/
+https://palewebserial.wordpress.com/2021/08/31/summer-break-13-9/
+https://palewebserial.wordpress.com/2021/09/02/break-1/
+https://palewebserial.wordpress.com/2021/09/04/summer-break-13-10/
+https://palewebserial.wordpress.com/2021/09/07/break-2/
+https://palewebserial.wordpress.com/2021/09/11/summer-break-13-11/
+https://palewebserial.wordpress.com/2021/09/14/break-3/
+https://palewebserial.wordpress.com/2021/09/18/summer-break-13-12/
+https://palewebserial.wordpress.com/2021/09/21/break-4/
+https://palewebserial.wordpress.com/2021/09/26/summer-break-13-13/
+https://palewebserial.wordpress.com/2021/09/28/break-5/
+https://palewebserial.wordpress.com/2021/10/02/summer-break/
+https://palewebserial.wordpress.com/2021/10/05/fall-out-14-1/
+https://palewebserial.wordpress.com/2021/10/09/fall-out-14-2/
+https://palewebserial.wordpress.com/2021/10/12/fall-out-14-3/
+https://palewebserial.wordpress.com/2021/10/17/fall-out-14-4/
+https://palewebserial.wordpress.com/2021/10/19/fall-out-14-5/
+https://palewebserial.wordpress.com/2021/10/24/fall-out-14-6/
+https://palewebserial.wordpress.com/2021/10/26/fall-out-14-z/
+https://palewebserial.wordpress.com/2021/10/30/playing-a-part-15-1/
+https://palewebserial.wordpress.com/2021/11/02/playing-a-part-15-2/
+https://palewebserial.wordpress.com/2021/11/06/playing-a-part-15-3/
+https://palewebserial.wordpress.com/2021/11/09/playing-a-part-15-4/
+https://palewebserial.wordpress.com/2021/11/13/playing-a-part-15-5/
+https://palewebserial.wordpress.com/2021/11/16/playing-a-part-15-6/
+https://palewebserial.wordpress.com/2021/11/20/playing-a-part-15-7/
+https://palewebserial.wordpress.com/2021/11/23/playing-a-part-15-8/
+https://palewebserial.wordpress.com/2021/11/27/playing-a-part-15-9/
+https://palewebserial.wordpress.com/2021/11/30/playing-a-part-15-10/
+https://palewebserial.wordpress.com/2021/12/04/playing-a-part-15-11/
+https://palewebserial.wordpress.com/2021/12/08/playing-a-part-15-z/
+https://palewebserial.wordpress.com/2021/12/11/left-in-the-dust-16-1/
+https://palewebserial.wordpress.com/2021/12/14/left-in-the-dust-16-2/
+https://palewebserial.wordpress.com/2021/12/18/left-in-the-dust-16-3/
+https://palewebserial.wordpress.com/2021/12/21/left-in-the-dust-16-4/
+https://palewebserial.wordpress.com/2021/12/28/left-in-the-dust-16-5/
+https://palewebserial.wordpress.com/2022/01/01/left-in-the-dust-16-6/
+https://palewebserial.wordpress.com/2022/01/04/left-in-the-dust-16-7/
+https://palewebserial.wordpress.com/2022/01/08/left-in-the-dust-16-8/
+https://palewebserial.wordpress.com/2022/01/11/left-in-the-dust-16-9/
+https://palewebserial.wordpress.com/2022/01/15/left-in-the-dust-16-10/
+https://palewebserial.wordpress.com/2022/01/18/left-in-the-dust-16-y/
+https://palewebserial.wordpress.com/2022/01/22/left-in-the-dust-16-z/
+https://palewebserial.wordpress.com/2022/01/25/gone-and-done-it-17-1/
+https://palewebserial.wordpress.com/2022/01/29/gone-and-done-it-17-2/
+https://palewebserial.wordpress.com/2022/02/01/gone-and-done-it-17-3/
+https://palewebserial.wordpress.com/2022/02/05/gone-and-done-it-17-4/
+https://palewebserial.wordpress.com/2022/02/08/gone-and-done-it-17-5/
+https://palewebserial.wordpress.com/2022/02/12/gone-and-done-it-17-6/
+https://palewebserial.wordpress.com/2022/02/15/gone-and-done-it-17-7/
+https://palewebserial.wordpress.com/2022/02/19/gone-and-done-it-17-a/
+https://palewebserial.wordpress.com/2022/02/22/gone-and-done-it-17-b/
+https://palewebserial.wordpress.com/2022/02/26/gone-and-done-it-17-8/
+https://palewebserial.wordpress.com/2022/03/01/gone-and-done-it-17-9/
+https://palewebserial.wordpress.com/2022/03/06/gone-and-done-it-17-10/
+https://palewebserial.wordpress.com/2022/03/08/gone-and-done-it-17-11/
+https://palewebserial.wordpress.com/2022/03/13/gone-and-done-it-17-12/
+https://palewebserial.wordpress.com/2022/03/15/gone-and-done-it-17-13/
+https://palewebserial.wordpress.com/2022/03/19/gone-and-done-it-17-14/
+https://palewebserial.wordpress.com/2022/03/22/gone-and-done-it-17-15/
+https://palewebserial.wordpress.com/2022/03/26/gone-and-done-it-17-x/
+https://palewebserial.wordpress.com/2022/03/29/gone-and-done-it-17-y/
+https://palewebserial.wordpress.com/2022/04/02/gone-and-done-it-17-z/
+https://palewebserial.wordpress.com/2022/04/06/wild-abandon-18-1/
+https://palewebserial.wordpress.com/2022/04/09/wild-abandon-18-2/
+https://palewebserial.wordpress.com/2022/04/12/wild-abandon-18-a/
+https://palewebserial.wordpress.com/2022/04/16/wild-abandon-18-3/
+https://palewebserial.wordpress.com/2022/04/19/wild-abandon-18-4/
+https://palewebserial.wordpress.com/2022/04/23/wild-abandon-18-5/
+https://palewebserial.wordpress.com/2022/04/26/wild-abandon-18-b/
+https://palewebserial.wordpress.com/2022/04/30/wild-abandon-18-6/
+https://palewebserial.wordpress.com/2022/05/03/wild-abandon-18-7/
+https://palewebserial.wordpress.com/2022/05/07/wild-abandon-18-c/
+https://palewebserial.wordpress.com/2022/05/10/wild-abandon-18-8/
+https://palewebserial.wordpress.com/2022/05/14/wild-abandon-18-9/
+https://palewebserial.wordpress.com/2022/05/17/wild-abandon-18-10/
+https://palewebserial.wordpress.com/2022/05/21/wild-abandon-18-y/
+https://palewebserial.wordpress.com/2022/05/25/wild-abandon-18-z/
+https://palewebserial.wordpress.com/2022/05/28/crossed-with-silver-19-1/
+https://palewebserial.wordpress.com/2022/05/31/crossed-with-silver-19-2/
+https://palewebserial.wordpress.com/2022/06/04/crossed-with-silver-19-3/
+https://palewebserial.wordpress.com/2022/06/07/crossed-with-silver-19-4/
+https://palewebserial.wordpress.com/2022/06/11/crossed-with-silver-19-5/
+https://palewebserial.wordpress.com/2022/06/14/crossed-with-silver-19-6/
+https://palewebserial.wordpress.com/2022/06/18/crossed-with-silver-19-7/
+https://palewebserial.wordpress.com/2022/06/21/crossed-with-silver-19-8/
+https://palewebserial.wordpress.com/2022/06/25/crossed-with-silver-19-9/
+https://palewebserial.wordpress.com/2022/06/28/crossed-with-silver-19-10/
+https://palewebserial.wordpress.com/2022/07/02/crossed-with-silver-19-11/
+https://palewebserial.wordpress.com/2022/07/05/crossed-with-silver-19-12/
+https://palewebserial.wordpress.com/2022/07/09/crossed-with-silver-19-13/
+https://palewebserial.wordpress.com/2022/07/12/crossed-with-silver-19-14/
+https://palewebserial.wordpress.com/2022/07/18/crossed-with-silver-19-15/
+https://palewebserial.wordpress.com/2022/07/19/crossed-with-silver-19-16/
+https://palewebserial.wordpress.com/2022/07/23/crossed-with-silver-19-17/
+https://palewebserial.wordpress.com/2022/07/27/crossed-with-silver-19-z/
+https://palewebserial.wordpress.com/2022/08/02/let-slip-20-1/
+https://palewebserial.wordpress.com/2022/08/06/let-slip-20-2/
+https://palewebserial.wordpress.com/2022/08/09/let-slip-20-3/
+https://palewebserial.wordpress.com/2022/08/14/let-slip-20-a/
+https://palewebserial.wordpress.com/2022/08/16/let-slip-20-4/
+https://palewebserial.wordpress.com/2022/08/20/let-slip-20-5/
+https://palewebserial.wordpress.com/2022/08/23/let-slip-20-6/
+https://palewebserial.wordpress.com/2022/08/27/let-slip-20-b/
+https://palewebserial.wordpress.com/2022/08/30/let-slip-20-c/
+https://palewebserial.wordpress.com/2022/09/03/let-slip-20-7/
+https://palewebserial.wordpress.com/2022/09/10/let-slip-20-8/
+https://palewebserial.wordpress.com/2022/09/13/let-slip-20-d/
+https://palewebserial.wordpress.com/2022/09/17/let-slip-20-e/
+https://palewebserial.wordpress.com/2022/09/20/let-slip-20-9/
+https://palewebserial.wordpress.com/2022/09/25/let-slip-20-f/
+https://palewebserial.wordpress.com/2022/09/27/let-slip-20-z/
+https://palewebserial.wordpress.com/2022/10/04/in-absentia-21-1/
+https://palewebserial.wordpress.com/2022/10/10/in-absentia-21-2/
+https://palewebserial.wordpress.com/2022/10/11/in-absentia-21-3/
+https://palewebserial.wordpress.com/2022/10/15/in-absentia-21-4/
+https://palewebserial.wordpress.com/2022/10/18/in-absentia-21-5/
+https://palewebserial.wordpress.com/2022/10/22/in-absentia-21-6/
+https://palewebserial.wordpress.com/2022/10/29/in-absentia-21-7/
+https://palewebserial.wordpress.com/2022/11/01/in-absentia-21-8/
+https://palewebserial.wordpress.com/2022/11/09/in-absentia-21-9/
+https://palewebserial.wordpress.com/2022/11/12/in-absentia-21-10/
+https://palewebserial.wordpress.com/2022/11/15/in-absentia-21-11/
+https://palewebserial.wordpress.com/2022/11/22/in-absentia-21-12/
+https://palewebserial.wordpress.com/2022/11/26/in-absentia-21-13/
+https://palewebserial.wordpress.com/2022/12/06/hard-pass-22-1/
+https://palewebserial.wordpress.com/2022/12/10/hard-pass-22-2/
+https://palewebserial.wordpress.com/2022/12/17/hard-pass-22-3/
+https://palewebserial.wordpress.com/2022/12/20/30691/
+https://palewebserial.wordpress.com/2022/12/27/hard-pass-22-5/
+https://palewebserial.wordpress.com/2023/01/03/hard-pass-22-6/
+https://palewebserial.wordpress.com/2023/01/10/hard-pass-22-7/
+https://palewebserial.wordpress.com/2023/01/14/hard-pass-22-z/
+https://palewebserial.wordpress.com/2023/01/21/go-for-the-throat-23-1/
+https://palewebserial.wordpress.com/2023/01/24/go-for-the-throat-23-a/
+https://palewebserial.wordpress.com/2023/01/31/go-for-the-throat-23-2/
+https://palewebserial.wordpress.com/2023/02/07/go-for-the-throat-23-3/
+https://palewebserial.wordpress.com/2023/02/11/go-for-the-throat-23-4/
+https://palewebserial.wordpress.com/2023/02/14/go-for-the-throat-23-5/
+https://palewebserial.wordpress.com/2023/02/22/go-for-the-throat-23-6/
+https://palewebserial.wordpress.com/2023/02/28/go-for-the-throat-23-7/
+https://palewebserial.wordpress.com/2023/03/04/go-for-the-throat-23-b/
+https://palewebserial.wordpress.com/2023/03/11/go-for-the-throat-23-c/
+https://palewebserial.wordpress.com/2023/03/14/go-for-the-throat-23-8/
+https://palewebserial.wordpress.com/2023/03/21/go-for-the-throat-23-d/
+https://palewebserial.wordpress.com/2023/03/28/go-for-the-throat-23-9/
+https://palewebserial.wordpress.com/2023/04/04/go-for-the-throat-23-e/
+https://palewebserial.wordpress.com/2023/04/11/go-for-the-throat-23-f/
+https://palewebserial.wordpress.com/2023/04/18/go-for-the-throat-23-z/
+https://palewebserial.wordpress.com/2023/04/22/finish-off-24-1/
+https://palewebserial.wordpress.com/2023/04/29/finish-off-24-a/
+https://palewebserial.wordpress.com/2023/05/06/finish-off-24-2/
+https://palewebserial.wordpress.com/2023/05/13/finish-off-24-3/
+https://palewebserial.wordpress.com/2023/05/20/finish-off-24-4/
+https://palewebserial.wordpress.com/2023/05/27/finish-off-24-5/
+https://palewebserial.wordpress.com/2023/06/03/finish-off-24-6/
+https://palewebserial.wordpress.com/2023/06/10/finish-off-24-7/
+https://palewebserial.wordpress.com/2023/06/17/finish-off-24-8/
+https://palewebserial.wordpress.com/2023/06/24/finish-off-24-9/
+https://palewebserial.wordpress.com/2023/07/01/finish-off-24-10/
+https://palewebserial.wordpress.com/2023/07/08/finish-off-24-11/
+https://palewebserial.wordpress.com/2023/07/15/finish-off-24-12/
+https://palewebserial.wordpress.com/2023/07/22/finish-off-24-13/
+https://palewebserial.wordpress.com/2023/07/29/finish-off-24-x/
+https://palewebserial.wordpress.com/2023/08/04/finish-off-24-14/
+https://palewebserial.wordpress.com/2023/08/12/finish-off-24-15/
+https://palewebserial.wordpress.com/2023/08/19/finish-off-24-16/
+https://palewebserial.wordpress.com/2023/08/26/finish-off-24-17/
+https://palewebserial.wordpress.com/2023/09/02/loose-ends-e-1/
+https://palewebserial.wordpress.com/2023/09/12/loose-ends-e-2/
+https://palewebserial.wordpress.com/2023/09/16/loose-ends-e-3/
+https://palewebserial.wordpress.com/2023/09/23/e-4/
+https://palewebserial.wordpress.com/2023/09/30/loose-ends-e-5/
+https://palewebserial.wordpress.com/2023/10/08/loose-ends-e-6/
+"""
+# with open("twig_full.html", "w", encoding="utf-8") as out:
+#     with open("links.txt", "w", encoding="utf-8") as link_out:
+#         for chapter in twig_chapters:
+#             url = f"{twig_base}/{chapter}"
+#             r = requests.get(url, allow_redirects=True)
+#             # r = requests.get(url)
+#             # get the real URL that should look something like https://twigserial.wordpress.com/category/story/arc-1-taking-root/1-01/ and check the text before the last slash
+#             real_url = r.url
+#             if len(real_url.split("/")) < 8:
+#                 continue
+#             data = real_url.split("/")[-1]
+#             if len(data) == 0:
+#                 data = real_url.split("/")[-2]
+#             print(real_url)
+#             link_out.write(real_url + "\n")
+#             out.write(r.text)
+#             out.write("\n\n" + "="*50 + "\n\n")
+
+with open("pale_full.html", "w", encoding="utf-8") as out:
+    for chapter in pale_chapters.splitlines():
+        url = chapter.strip()
+        r = requests.get(url)
+        real_url = r.url
+        print(real_url)
+        out.write(r.text)
+        out.write("\n\n" + "="*50 + "\n\n")
