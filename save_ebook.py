@@ -2,6 +2,7 @@
 # cd d:\tom\scripts
 # py save_ebook.py
 
+import re
 import requests
 
 twig_base = "https://twigserial.wordpress.com"
@@ -679,11 +680,36 @@ https://palewebserial.wordpress.com/2023/10/08/loose-ends-e-6/
 #             out.write(r.text)
 #             out.write("\n\n" + "="*50 + "\n\n")
 
+def extract_chapter_content(html):
+    title_match = re.search(r'<h1 class="entry-title">(.*?)</h1>', html, re.DOTALL)
+    title = title_match.group(0) if title_match else ""
+    content_match = re.search(
+        r'<div class="entry-content">(.*?)</div><!-- \.entry-content -->',
+        html,
+        re.DOTALL,
+    )
+    content = content_match.group(1).strip() if content_match else ""
+    if content:
+        content = re.sub(
+            r'<div id="jp-post-flair".*',
+            "",
+            content,
+            flags=re.DOTALL,
+        )
+        content = re.sub(
+            r'<div id="jp-relatedposts".*',
+            "",
+            content,
+            flags=re.DOTALL,
+        )
+    return f"{title}\n{content.strip()}"
+
+
 with open("pale_full.html", "w", encoding="utf-8") as out:
     for chapter in pale_chapters.splitlines():
         url = chapter.strip()
         r = requests.get(url)
         real_url = r.url
         print(real_url)
-        out.write(r.text)
+        out.write(extract_chapter_content(r.text))
         out.write("\n\n" + "="*50 + "\n\n")
